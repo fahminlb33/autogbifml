@@ -1,0 +1,13 @@
+click
+pandas
+geopandas
+pydantic
+rasterio
+pyyaml
+joblib
+numpy
+xarray
+scikit-learn
+notebook
+matplotlib
+rasterstats
