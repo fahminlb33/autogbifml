@@ -3,6 +3,7 @@ import logging
 
 __LOGGER = None
 
+
 def init_logger(name):
     # setup logging
     __LOGGER = logging.getLogger(name)
