@@ -1,0 +1,33 @@
+minimumLongitude: 20
+maximumLongitude: 58
+minimumLatitude: -34
+maximumLatitude: 4
+minimumDepth: 1
+maximumDepth: 1
+startDateTime: 2021-09-01
+endDateTime: 2023-11-30
+outputPath: ./dataset/copernicus_marine/america
+dataset:
+  # Ocean Physics
+  - id: cmems_mod_glo_phy_anfc_0.083deg_P1D-m
+    variables: [zos, pbo, tob, sob]
+  - id: cmems_mod_glo_phy-so_anfc_0.083deg_P1D-m
+    variables: [so]
+  - id: cmems_mod_glo_phy-thetao_anfc_0.083deg_P1D-m
+    variables: [thetao]
+  - id: cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m
+    variables: [uo, vo]
+  - id: cmems_mod_glo_phy-wcur_anfc_0.083deg_P1D-m
+    variables: [wo]
+
+  # Ocean Biogeochemistry
+  - id: cmems_mod_glo_bgc-bio_anfc_0.25deg_P1D-m
+    variables: [nppv, o2]
+  - id: cmems_mod_glo_bgc-car_anfc_0.25deg_P1D-m
+    variables: [talk, dissic, ph]
+  - id: cmems_mod_glo_bgc-co2_anfc_0.25deg_P1D-m
+    variables: [spco2]
+  - id: cmems_mod_glo_bgc-nut_anfc_0.25deg_P1D-m
+    variables: [no3, po4, si, fe]
+  - id: cmems_mod_glo_bgc-pft_anfc_0.25deg_P1D-m 
+    variables: [chl, phyc]

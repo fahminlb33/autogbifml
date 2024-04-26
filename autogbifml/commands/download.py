@@ -1,77 +1,87 @@
 import logging
 
-import pandas as pd
+import yaml
 import copernicusmarine
 
-from pydantic import BaseModel
 from joblib import Parallel, delayed
+from pydantic import BaseModel
+
+from infrastructure.logger import init_logger
+
+
+class DownloadDataset(BaseModel):
+    id: str
+    variables: list[str]
+
+
+class DownloadConfigRoot(BaseModel):
+    minimumLongitude: float
+    maximumLongitude: float
+    minimumLatitude: float
+    maximumLatitude: float
+    minimumDepth: float
+    maximumDepth: float
+    startDateTime: str
+    endDateTime: str
+    outputPath: str
+    dataset: list[DownloadDataset]
 
 
 class DownloadCommandOptions(BaseModel):
-    dataset_id: str
-    output_path: str
-
-    variables: list[str]
-
-    dt_start: str
-    dt_end: str
-
-    min_lon: float
-    max_lon: float
-    min_lat: float
-    max_lat: float
-    min_depth: float | None = None
-    max_depth: float | None = None
-
+    config_file: str
     jobs: int = 1
 
 
 class DownloadCommand:
 
     def __init__(self, **kwargs) -> None:
+        self.logger = init_logger("DownloadCommand")
+
+    def __call__(self, **kwargs) -> None:
         self.config = DownloadCommandOptions(**kwargs)
 
-    def __call__(self) -> None:
-        # prepare copernicus config
-        self.prepare()
-
-        # create date range
-        start = pd.to_datetime(self.config.dt_start)
-        end = pd.to_datetime(self.config.dt_end)
-        date_range = pd.interval_range(start=start, end=end,
-                                       freq="ME").tolist()
-
-        date_range = [(date.left.strftime('%Y-%m-%dT%H:%M:%S'),
-                       date.right.strftime('%Y-%m-%dT%H:%M:%S'))
-                      for date in date_range]
+        # read config
+        dl_config = DownloadConfigRoot(
+            **yaml.safe_load(open(self.config.config_file, "r")))
 
         # download data
-        Parallel(n_jobs=self.config.jobs, verbose=1)(
-            delayed(DownloadCommand.download_data)(self.config, date)
-            for date in date_range)
+        job_fn = delayed(DownloadCommand.download_data)
+        jobs = [job_fn(d, self.config) for d in dl_config.dataset]
+        Parallel(n_jobs=self.config.jobs, verbose=1)(jobs)
 
-    def prepare(self) -> None:
+        self.logger.info("Download complete!")
+
+    @staticmethod
+    def disable_copernicus_log(self) -> None:
         logging.getLogger("copernicus_marine_blank_logger").disabled = True
         logging.getLogger("copernicus_marine_root_logger").disabled = True
 
     @staticmethod
-    def download_data(config: DownloadCommandOptions, dt: tuple[str,
-                                                                str]) -> None:
-        filename = f"{config.dataset_id}-{dt[0][:7]}_{dt[1][:7]}.nc"
-        print(f"Downloading {filename}")
+    def download_data(dataset: DownloadDataset,
+                      config: DownloadConfigRoot) -> None:
+        # setup copernicus config
+        DownloadCommand.disable_copernicus_log()
 
-        copernicusmarine.subset(
-            dataset_id=config.dataset_id,
-            variables=config.variables,
-            start_datetime=dt[0],
-            end_datetime=dt[1],
-            minimum_longitude=config.min_lon,
-            maximum_longitude=config.max_lon,
-            minimum_latitude=config.min_lat,
-            maximum_latitude=config.max_lat,
-            output_filename=filename,
-            output_directory=config.output_path,
+        # start subset download
+        print(f"Downloading {dataset.id}...")
+        out_path = copernicusmarine.subset(
+            # dataset
+            dataset_id=dataset.id,
+            variables=dataset.variables,
+
+            # slicer
+            start_datetime=config.startDateTime,
+            end_datetime=config.endDateTime,
+            minimum_longitude=config.minimumLongitude,
+            maximum_longitude=config.maximumLongitude,
+            minimum_latitude=config.minimumLatitude,
+            maximum_latitude=config.maximumLatitude,
+            minimum_depth=config.minimumDepth,
+            maximum_depth=config.maximumDepth,
+            output_directory=config.outputPath,
             force_download=True,
-            overwrite_output_data=True,
+            overwrite_output_data=False,
             # disable_progress_bar=True,
         )
+
+        print(f"Saved {dataset.id} to {out_path}")
