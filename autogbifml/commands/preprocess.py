@@ -16,8 +16,8 @@ from infrastructure.logger import init_logger
 
 
 class PreprocessGBIFCommandOptions(BaseModel):
-    file_path: str
-    output_filename: str
+    input_path: str
+    output_path: str
 
 
 class PreprocessGBIFCommand:
@@ -87,16 +87,40 @@ class PreprocessGBIFCommand:
         return proc
 
 
+class PreprocessZoneIDCommandOptions(BaseModel):
+    input_path: str
+    output_path: str
+
+
+class PreprocessZoneIDCommand:
+
+    def __init__(self) -> None:
+        self.logger = init_logger("PreprocessZoneIDCommand")
+
+    def __call__(self, **kwargs) -> None:
+        # parse args
+        self.config = PreprocessZoneIDCommandOptions(**kwargs)
+
+        # read shapefile
+        df_geom = gpd.read_file(self.config.input_path)
+
+        # add sequential ZONE_ID attribute
+        df_geom["ZONE_ID"] = range(1, len(df_geom) + 1)
+
+        # save to shapefile
+        df_geom.to_file(self.config.output_path, driver="ESRI Shapefile")
+
+
 class PreprocessCopernicusCommandOptions(BaseModel):
     raster_path: str
-    vector_path: str
+    zone_path: str
     occurence_path: str
     output_path: str
 
     jobs: int = 1
 
 
-class PreprocessCopernicusCommand:
+class PreprocessZonalStatsCommand:
     ZONAL_STATS = ["min", "max", "mean", "median", "std", "range"]
 
     def __init__(self, **kwargs) -> None:
@@ -129,7 +153,7 @@ class PreprocessCopernicusCommand:
                 date_str = date.strftime("%Y-%m-%d")
 
                 # create delayed function
-                delayed_func = delayed(PreprocessCopernicusCommand.zonal_stats)
+                delayed_func = delayed(PreprocessZonalStatsCommand.zonal_stats)
                 jobs = [
                     delayed_func(
                         variable, self.zonal_index, self.zonal_mask,

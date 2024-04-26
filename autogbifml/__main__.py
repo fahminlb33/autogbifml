@@ -3,12 +3,13 @@ import argparse
 from pydantic import ValidationError
 from commands import (
     DownloadCommand,
-    PredictCommand,
-    PreprocessCopernicusCommand,
     PreprocessGBIFCommand,
+    PreprocessZoneIDCommand,
+    PreprocessZonalStatsCommand,
     TuneCommand,
     TrainCommand,
     EvaluateCommand,
+    PredictCommand,
 )
 
 
@@ -28,7 +29,9 @@ def main():
     parser_download = subparsers.add_parser(
         "download", help="Downloads Copernicus Marine data")
     parser_download.set_defaults(func=DownloadCommand())
-    parser_download.add_argument("config_file", type=str, help="Path to yaml config")
+    parser_download.add_argument("config_file",
+                                 type=str,
+                                 help="Path to yaml config")
 
     # --- preprocessing commands
     parser_preprocess = subparsers.add_parser(
@@ -37,31 +40,55 @@ def main():
 
     # gbif
     parser_gbif = subparser_preprocess.add_parser(
-        "gbif", help="Preprocess GBIF data to simple occurence data")
+        "occurence", help="Preprocess GBIF data to simple occurence data")
     parser_gbif.set_defaults(func=PreprocessGBIFCommand())
     parser_gbif.add_argument(
-        "input-path",
+        "input_path",
         type=str,
         help="Path to DarwinCore ZIP containing the occurence dataset")
-    parser_gbif.add_argument("output-path", type=str, help="Output filename")
+    parser_gbif.add_argument(
+        "output_path",
+        type=str,
+        help="Output filename to summarized GBIF occurence data")
 
-    # copernicus marine
+    # zone-id
+    parser_gbif = subparser_preprocess.add_parser(
+        "zone-id", help="Adds zone id to existing zone polygon grid Shapefile")
+    parser_gbif.set_defaults(func=PreprocessZoneIDCommand())
+    parser_gbif.add_argument(
+        "input_path",
+        type=str,
+        help=
+        "Path to Shapefile containing the grid or zone to calculate the zonal statistics from"
+    )
+    parser_gbif.add_argument("output_path",
+                             type=str,
+                             help="Output Shapefile path")
+
+    # zonal statistics and occurence
     parser_copernicus = subparser_preprocess.add_parser(
-        "copernicus",
-        help="Preprocess Copernicus Marine data to zonal statistics")
-    parser_copernicus.set_defaults(func=PreprocessCopernicusCommand())
-    parser_copernicus.add_argument("--raster-path",
+        "zonal-stats",
+        help=
+        "Preprocess GBIF occurence data and Copernicus Marine raster data to zonal statistics"
+    )
+    parser_copernicus.set_defaults(func=PreprocessZonalStatsCommand())
+    parser_copernicus.add_argument("occurence_path",
                                    type=str,
-                                   help="Raster path containing netCDF files")
-    parser_copernicus.add_argument("--vector-path",
-                                   type=str,
-                                   help="Vector path containing shapefile")
-    parser_copernicus.add_argument("--occurence-path",
-                                   type=str,
-                                   help="Occurence path containing csv files")
-    parser_copernicus.add_argument("--output-path",
-                                   type=str,
-                                   help="Output path")
+                                   help="Path to simple GBIF occurence data")
+    parser_copernicus.add_argument(
+        "zone_path",
+        type=str,
+        help=
+        "Path to zone polygon Shapefile (it must have ZONE_ID in the attribute table)"
+    )
+    parser_copernicus.add_argument(
+        "raster_path",
+        type=str,
+        help="Path to a directory containing netCDF files")
+    parser_copernicus.add_argument(
+        "output_path",
+        type=str,
+        help="Output path to save the zonal statistics dataset")
 
     # --- tune command
     parser_tune = subparsers.add_parser(
