@@ -6,6 +6,7 @@ from commands import (
     PreprocessGBIFCommand,
     PreprocessZoneIDCommand,
     PreprocessZonalStatsCommand,
+    PreprocessSplitDatasetCommand,
     TuneCommand,
     TrainCommand,
     EvaluateCommand,
@@ -89,6 +90,46 @@ def main():
         "output_path",
         type=str,
         help="Output path to save the zonal statistics dataset")
+    
+    parser_copernicus.add_argument(
+        "--downsample",
+        type=str,
+        choices=["none", "weekly", "monthly"],
+        default="none",
+        help="Time frequency to downsample to (default: none)")
+    parser_copernicus.add_argument(
+        "--temp-dir",
+        type=str,
+        help="Path to temporary directory to store intermediate files")
+    
+    # split dataset
+    parser_split = subparser_preprocess.add_parser(
+        "split", help="Samples and split dataset into train and test sets")
+    parser_split.set_defaults(func=PreprocessSplitDatasetCommand())
+    parser_split.add_argument(
+        "dataset_file",
+        type=str,
+        help=
+        "Path to Parquet file containing the full zonal statistics data"
+    )
+    parser_split.add_argument("output_path",
+                             type=str,
+                             help="Output folder for the train and test split")
+    
+    parser_split.add_argument(
+        "--test-size",
+        type=float,
+        default=0.2,
+        help="Test size in proportion of the dataset (default: 0.2)")
+    parser_split.add_argument(
+        "--stratify",
+        action='store_true',
+        help="Perform stratified sampling (default: True)")
+    parser_split.add_argument(
+        "--undersample",
+        action='store_true',
+        help="Perform undersampling (default: False)")
+
 
     # --- tune command
     parser_tune = subparsers.add_parser(
@@ -112,14 +153,8 @@ def main():
 
     # parse CLI
     args = parser.parse_args()
-    print(args)
-    # args.func(args)
+    args.func(args)
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except ValidationError as e:
-        print(e)
-    except Exception as e:
-        print(e)
+    main()

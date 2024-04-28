@@ -1,18 +1,18 @@
+import os
 import re
 import glob
 from zipfile import ZipFile
 
-import rasterio
-import numpy as np
-import xarray as xr
 import pandas as pd
 import geopandas as gpd
-import xrspatial as xrs
 
 from joblib import Parallel, delayed
 from pydantic import BaseModel
+from sklearn.model_selection import train_test_split
+from imblearn.under_sampling import RandomUnderSampler
 
 from infrastructure.logger import init_logger
+from ml.preprocessing import ZonalProcessor, ZonalProcessorOptions, DownsampleEnum
 
 
 class PreprocessGBIFCommandOptions(BaseModel):
@@ -97,9 +97,9 @@ class PreprocessZoneIDCommand:
     def __init__(self) -> None:
         self.logger = init_logger("PreprocessZoneIDCommand")
 
-    def __call__(self, **kwargs) -> None:
+    def __call__(self, args) -> None:
         # parse args
-        self.config = PreprocessZoneIDCommandOptions(**kwargs)
+        self.config = PreprocessZoneIDCommandOptions(**vars(args))
 
         # read shapefile
         df_geom = gpd.read_file(self.config.input_path)
@@ -111,104 +111,126 @@ class PreprocessZoneIDCommand:
         df_geom.to_file(self.config.output_path, driver="ESRI Shapefile")
 
 
-class PreprocessCopernicusCommandOptions(BaseModel):
+class PreprocessZonalStatsCommandOptions(BaseModel):
     raster_path: str
     zone_path: str
     occurence_path: str
     output_path: str
+    downsample: DownsampleEnum = DownsampleEnum.NONE
+    test_size: float = 0.2
 
+    # job settings
+    temp_dir: str = "./temp"
     jobs: int = 1
 
 
 class PreprocessZonalStatsCommand:
-    ZONAL_STATS = ["min", "max", "mean", "median", "std", "range"]
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(self) -> None:
         self.logger = init_logger("PreprocessCopernicusCommand")
 
-    def __call__(self, **kwargs) -> None:
-        self.config = PreprocessCopernicusCommandOptions(**kwargs)
+    def __call__(self, args) -> None:
+        self.config = PreprocessZonalStatsCommandOptions(**vars(args))
 
-        # load dataset
-        self.load_vector_data()
-        self.load_occurence_data()
+        # create temp dir
+        os.makedirs(self.config.temp_dir, exist_ok=True)
 
         # find all raster files
         raster_files = glob.glob(f"{self.config.raster_path}/*.nc")
-        print(f"Found {len(raster_files)} raster files")
+        self.logger.info("Found %d raster files", len(raster_files))
 
         # process each raster file
-        for raster_file in raster_files:
-            # open raster file
-            ds = xr.open_dataset(raster_file)
+        jobs = [
+            ZonalProcessorOptions(raster_file=f,
+                                  occurence_file=self.config.occurence_path,
+                                  zone_file=self.config.zone_path,
+                                  output_path=self.config.temp_dir,
+                                  downsample=self.config.downsample)
+            for f in raster_files
+        ]
 
-            # process each day and variable
-            # TODO: allow time series resampling to monthly or weekly
-            for date in self.occurence_dates:
-                # check if date is in dataset
-                if date not in ds.time:
-                    continue
+        Parallel(n_jobs=self.config.jobs,
+                 verbose=1)(delayed(lambda x: ZonalProcessor(x)())(job)
+                            for job in jobs)
+        self.logger.info("Finished processing zonal statistics")
 
-                # convert to string
-                date_str = date.strftime("%Y-%m-%d")
+        # merge all temp data to one dataframe
+        self.merge()
+        self.logger.info("Finished!")
 
-                # create delayed function
-                delayed_func = delayed(PreprocessZonalStatsCommand.zonal_stats)
-                jobs = [
-                    delayed_func(
-                        variable, self.zonal_index, self.zonal_mask,
-                        ds.sel(time=date)[variable].values, self.crs_affine,
-                        self.ZONAL_STATS,
-                        f"{self.config.output_path}/{variable}_{date_str}.parquet"
-                    ) for variable in list(ds.keys())
-                ]
+    def merge(self):
+        self.logger.info("Merging all variables...")
 
-                # run in parallel
-                Parallel(n_jobs=self.config.jobs, verbose=1)(jobs)
+        # find all temp parquet
+        temp_files = glob.glob(f"{self.config.temp_dir}/*.parquet")
 
-    def run_merge(self) -> None:
-        pass
+        # first parquet as reference
+        df_final = pd.read_parquet(temp_files[0])
+        for f in temp_files[1:]:
+            # read next dataset
+            df_temp = pd.read_parquet(f)
 
-    def load_vector_data(self) -> None:
-        # get grid mask
-        grid_df = gpd.read_file(self.config.vector_path)
-        self.zonal_mask = grid_df["geometry"]
-        self.zonal_index = grid_df["id"].astype(int)
+            # merge on ZONE_ID
+            df_final = df_final.merge(df_temp, on=["zone_id", "ts"]) \
+                .drop(columns=["target_x"], errors="ignore")
 
-        # derived from EPSG:4326
-        self.crs_affine = rasterio.Affine(0.25, 0.0, 18.875, 0.0, -0.25,
-                                          -0.875)
+        # drop extra merge fields
+        df_final.drop(
+            columns=[x for x in df_final.columns if x.startswith("target_")])
 
-    def load_occurence_data(self) -> None:
-        # load occurence data
-        occurence_df = pd.read_csv(self.config.occurence_path,
-                                   parse_dates=["ts"])
+        # rearange columns
+        cols = list(x for x in df_final.columns if not x.startswith("target_"))
+        cols.remove("ts")
+        cols.remove("target")
+        cols.insert(1, "ts")
+        cols.append("target")
 
-        # get all unique occurence date
-        # occurence_df = occurence_df[(occurence_df["ts"].dt.year >= 2021) & (occurence_df["ts"].dt.month >= 9)]
-        self.occurence_dates = occurence_df["ts"].unique()
+        df_final = df_final[cols]
 
-        print(f"Found {len(self.occurence_dates)} unique occurence dates")
+        # save merged dataset
+        df_final.to_parquet(self.config.output_path, engine="pyarrow")
 
-    @staticmethod
-    def zonal_stats(variable, zonal_index, zonal_mask, zonal_values, affine,
-                    stats, output_path):
-        print(f"Calculating zonal stats for {output_path}")
+class PreprocessSplitDatasetCommandOptions(BaseModel):
+    dataset_file: str
+    output_path: str
 
-        # calculate zonal index
-        result = zonal_stats(zonal_mask,
-                             zonal_values,
-                             affine=affine,
-                             stats=stats)
+    test_size: float = 0.2
+    stratify: bool = True
+    undersample: bool = False
 
-        # combine with zonal index
-        result_pd = pd.DataFrame(result) \
-            .add_prefix(f"{variable}_") \
-            .assign(variable=variable) \
-            .set_index(zonal_index)
+class PreprocessSplitDatasetCommand:
 
-        # drop na
-        result_pd = result_pd.dropna()
+    def __init__(self) -> None:
+        self.logger = init_logger("PreprocessSplitDatasetCommand")
 
-        # save to file
-        result_pd.to_parquet(output_path)
+    def __call__(self, args) -> None:
+        self.config = PreprocessSplitDatasetCommandOptions(**vars(args))
+
+        # load dataset
+        self.logger.info("Loading dataset...")
+        df = pd.read_parquet(self.config.dataset_file)
+        self.logger.info("Dataset loaded! Rows: %d", len(df))
+
+        # split features
+        X, y = df.drop(columns=["target"]), df["target"]
+
+        # should undersample?
+        if self.config.undersample:
+            rus = RandomUnderSampler(random_state=42)
+            X, y = rus.fit_resample(X, y)
+
+            self.logger.info("Dataset undersampling result: %d", len(X))
+
+        # split dataset
+        if self.config.stratify:
+            self.logger.info("Using stratified sampling...")
+            df_train, df_test = train_test_split(X.assign(target=y), test_size=self.config.test_size, stratify=y)
+        else:
+            self.logger.info("Not using stratified sampling...")
+            df_train, df_test = train_test_split(X.assign(target=y), test_size=self.config.test_size)
+
+        # save dataset
+        self.logger.info("Saving dataset...")
+        df_train.to_parquet(os.path.join(self.config.output_path, "train.parquet"), engine="pyarrow")
+        df_test.to_parquet(os.path.join(self.config.output_path, "test.parquet"), engine="pyarrow")
+
