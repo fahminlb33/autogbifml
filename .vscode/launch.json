@@ -1,0 +1,25 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: Module",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "autogbifml",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "preprocess",
+                "zonal-stats",
+                "./dataset/darwin_humpback_whale/occurence_proc.csv",
+                "./dataset/shp/america/sea_grid_count_americas_zoned.shp",
+                "./dataset/copernicus_marine/america/meong",
+                "./dataset/copernicus_marine/america/meong",
+                "--temp-dir",
+                "./temp",
+            ]
+        }
+    ]
+}

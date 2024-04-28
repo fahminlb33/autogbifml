@@ -162,4 +162,5 @@ cython_debug/
 # Dataset
 dataset/
 
-
+# Temp dir
+temp/

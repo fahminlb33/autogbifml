@@ -1,13 +1,12 @@
-click
 pandas
 geopandas
 pydantic
-rasterio
 pyyaml
 joblib
 numpy
 xarray
+xarray-spatial
 scikit-learn
-notebook
+ipykernel
 matplotlib
-rasterstats
+imbalanced-learn
