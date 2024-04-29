@@ -66,8 +66,7 @@ class PreprocessGBIFCommand:
 
                 # save to csv
                 df_subset.to_csv(self.config.output_filename, index=False)
-                self.logger.info(
-                    f"File saved to {self.config.output_filename}")
+                self.logger.info(f"File saved to {self.config.output_filename}")
 
     @staticmethod
     def coalesce_coordinate(col: str) -> float:
@@ -141,17 +140,17 @@ class PreprocessZonalStatsCommand:
 
         # process each raster file
         jobs = [
-            ZonalProcessorOptions(raster_file=f,
-                                  occurence_file=self.config.occurence_path,
-                                  zone_file=self.config.zone_path,
-                                  output_path=self.config.temp_dir,
-                                  downsample=self.config.downsample)
-            for f in raster_files
+            ZonalProcessorOptions(
+                raster_file=f,
+                occurence_file=self.config.occurence_path,
+                zone_file=self.config.zone_path,
+                output_path=self.config.temp_dir,
+                downsample=self.config.downsample) for f in raster_files
         ]
 
-        Parallel(n_jobs=self.config.jobs,
-                 verbose=1)(delayed(lambda x: ZonalProcessor(x)())(job)
-                            for job in jobs)
+        Parallel(
+            n_jobs=self.config.jobs, verbose=1)(
+                delayed(lambda x: ZonalProcessor(x)())(job) for job in jobs)
         self.logger.info("Finished processing zonal statistics")
 
         # merge all temp data to one dataframe
@@ -190,6 +189,7 @@ class PreprocessZonalStatsCommand:
         # save merged dataset
         df_final.to_parquet(self.config.output_path, engine="pyarrow")
 
+
 class PreprocessSplitDatasetCommandOptions(BaseModel):
     dataset_file: str
     output_path: str
@@ -197,6 +197,7 @@ class PreprocessSplitDatasetCommandOptions(BaseModel):
     test_size: float = 0.2
     stratify: bool = True
     undersample: bool = False
+
 
 class PreprocessSplitDatasetCommand:
 
@@ -224,13 +225,18 @@ class PreprocessSplitDatasetCommand:
         # split dataset
         if self.config.stratify:
             self.logger.info("Using stratified sampling...")
-            df_train, df_test = train_test_split(X.assign(target=y), test_size=self.config.test_size, stratify=y)
+            df_train, df_test = train_test_split(
+                X.assign(target=y), test_size=self.config.test_size, stratify=y)
         else:
             self.logger.info("Not using stratified sampling...")
-            df_train, df_test = train_test_split(X.assign(target=y), test_size=self.config.test_size)
+            df_train, df_test = train_test_split(
+                X.assign(target=y), test_size=self.config.test_size)
 
         # save dataset
         self.logger.info("Saving dataset...")
-        df_train.to_parquet(os.path.join(self.config.output_path, "train.parquet"), engine="pyarrow")
-        df_test.to_parquet(os.path.join(self.config.output_path, "test.parquet"), engine="pyarrow")
-
+        df_train.to_parquet(
+            os.path.join(self.config.output_path, "train.parquet"),
+            engine="pyarrow")
+        df_test.to_parquet(
+            os.path.join(self.config.output_path, "test.parquet"),
+            engine="pyarrow")

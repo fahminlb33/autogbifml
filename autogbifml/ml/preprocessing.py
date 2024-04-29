@@ -76,8 +76,8 @@ class ZonalProcessor:
                 if not self.raster_has_depth:
                     zs = self.ds_raster[variable].sel(time=date)
                 else:
-                    zs = self.ds_raster[variable].sel(time=date,
-                                                      depth=self.raster_depth)
+                    zs = self.ds_raster[variable].sel(
+                        time=date, depth=self.raster_depth)
 
                 # calculate zonal statistics
                 zs = xrs.zonal_stats(self.zonal_mask, zs, zone_ids=self.df_zone["ZONE_ID"]) \
@@ -88,9 +88,8 @@ class ZonalProcessor:
                     .assign(ts=date)
 
                 # count number of occurence in zone
-                zso: gpd.GeoDataFrame = gpd.sjoin(self.df_zone,
-                                                  self.df_occurence,
-                                                  how="left")
+                zso: gpd.GeoDataFrame = gpd.sjoin(
+                    self.df_zone, self.df_occurence, how="left")
                 zso = zso.groupby("ZONE_ID")["ts"] \
                     .count() \
                     .reset_index() \
@@ -124,8 +123,9 @@ class ZonalProcessor:
         self.logger.info(f"Loading occurence dataset...")
 
         # load occurence dataset
-        df = pd.read_csv(self.config.occurence_file,
-                         parse_dates=["ts"]).drop(columns=["species"])
+        df = pd.read_csv(
+            self.config.occurence_file,
+            parse_dates=["ts"]).drop(columns=["species"])
 
         # resample if needed
         if self.config.downsample == DownsampleEnum.WEEKLY:
@@ -138,11 +138,10 @@ class ZonalProcessor:
             "%Y-%m-%d").sort_values().unique().tolist()
 
         # create points
-        self.df_occurence = gpd.GeoDataFrame(df,
-                                             geometry=gpd.points_from_xy(
-                                                 df["longitude"],
-                                                 df["latitude"]),
-                                             crs="epsg:4326")
+        self.df_occurence = gpd.GeoDataFrame(
+            df,
+            geometry=gpd.points_from_xy(df["longitude"], df["latitude"]),
+            crs="epsg:4326")
 
         self.logger.info("Found %d unique occurence dates",
                          len(self.occurence_dates))
@@ -194,6 +193,5 @@ class ZonalProcessor:
                      float(self.ds_raster.coords["longitude"].max().values)))
 
         # create polygon mask using geometry from shapefile
-        self.zonal_mask = canvas.polygons(self.df_zone,
-                                          geometry="geometry",
-                                          agg=ds.max("ZONE_ID"))
+        self.zonal_mask = canvas.polygons(
+            self.df_zone, geometry="geometry", agg=ds.max("ZONE_ID"))
