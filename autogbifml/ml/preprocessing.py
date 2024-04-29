@@ -46,7 +46,7 @@ class ZonalProcessor:
 
     def __init__(self, config: ZonalProcessorOptions) -> None:
         self.config = config
-        self.logger = init_logger("ZonalProcessor")
+        self.logger = init_logger(f"ZonalProcessor-{os.getpid()}")
 
     def __call__(self) -> Any:
         self.logger.info("Calculating zonal stats for %s",
