@@ -9,7 +9,6 @@ from commands import (
     PreprocessSplitDatasetCommand,
     TuneCommand,
     TrainCommand,
-    EvaluateCommand,
     PredictCommand,
 )
 
@@ -22,6 +21,12 @@ def main():
         "--jobs",
         default=1,
         help="Number of jobs to run in parallel",
+        type=int)
+    parser.add_argument(
+        "-s",
+        "--random-seed",
+        default=21,
+        help="Random seed for reproducibility",
         type=int)
 
     # add sub commands
@@ -168,11 +173,26 @@ def main():
     parser_train = subparsers.add_parser(
         "train", help="Train a single model for GBIF occurrence data")
     parser_train.set_defaults(func=TrainCommand())
-
-    # --- evaluate command
-    parser_predict = subparsers.add_parser(
-        "evaluate", help="Evaluate model classification performance")
-    parser_predict.set_defaults(func=EvaluateCommand())
+    parser_train.add_argument(
+        "dataset_path",
+        type=str,
+        help="Path to a training dataset directory containing train and test set"
+    )
+    parser_train.add_argument(
+        "output_path",
+        type=str,
+        help="Path to store the trained model and parameters")
+    parser_train.add_argument(
+        "--algorithm",
+        type=str,
+        required=True,
+        choices=["xgboost", "catboost", "random_forest", "decision_tree"],
+        help="Algorithm to train")
+    parser_train.add_argument(
+        "--params-path",
+        type=str,
+        required=True,
+        help="Path to model paramters YAML file")
 
     # --- predict command
     parser_predict = subparsers.add_parser(

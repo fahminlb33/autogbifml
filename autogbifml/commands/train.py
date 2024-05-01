@@ -1,4 +1,5 @@
 import os
+import glob
 from typing import Any, Optional
 
 import yaml
@@ -8,7 +9,8 @@ import mlflow
 from pydantic import BaseModel
 
 from infrastructure.logger import init_logger
-from ml.training import init_matplotlib, AlgorithmEnum, OptunaObjective, OptunaObjectiveOptions
+from ml.training import (init_matplotlib, AlgorithmEnum, OptunaObjective,
+                         OptunaObjectiveOptions, DataLoader, Trainer)
 
 
 class TuneCommandOptions(BaseModel):
@@ -77,7 +79,8 @@ class TuneCommand:
             study.best_params,
             open(
                 os.path.join(self.config.output_path,
-                             f"best_params_{self.config.algorithm.value}.yml"), "w"))
+                             f"best_params_{self.config.algorithm.value}.yml"),
+                "w"))
 
     def get_or_create_experiment(self, experiment_name):
         if experiment := mlflow.get_experiment_by_name(experiment_name):
@@ -88,13 +91,66 @@ class TuneCommand:
             return mlflow.create_experiment(experiment_name)
 
 
+class TrainCommandOptions(BaseModel):
+    dataset_path: str
+    output_path: str
+
+    algorithm: AlgorithmEnum
+    params_path: str
+
+    jobs: int = 1
+    random_seed: int = 21
+
+
 class TrainCommand:
 
-    def __call__(self) -> Any:
-        pass
+    def __init__(self) -> None:
+        self.logger = init_logger("TrainCommand")
+        init_matplotlib()
 
+    def __call__(self, args) -> Any:
+        self.config = TrainCommandOptions(**vars(args))
 
-class EvaluateCommand:
+        # find dataset
+        parquet_files = glob.glob(f"{self.config.dataset_path}/*.parquet")
+        train_file = list(filter(lambda x: "train" in x, parquet_files))[0]
+        test_file = list(filter(lambda x: "test" in x, parquet_files))[0]
 
-    def __call__(self) -> Any:
-        pass
+        self.logger.info(f"Found train dataset: {train_file}")
+        self.logger.info(f"Found test dataset: {test_file}")
+
+        # create data loader
+        loader = DataLoader()
+
+        # load dataset
+        self.logger.info("Loading dataset...")
+        X_train, y_train = loader.read_parquet(train_file)
+        X_test, y_test = loader.read_parquet(test_file)
+
+        cols = list(X_train.columns)
+
+        # preprocess
+        self.logger.info("Preprocessing dataset...")
+        X_train = loader.fit_transform(X_train)
+        X_test = loader.transform(X_test)
+
+        # create trainer
+        model = Trainer(
+            algorithm=self.config.algorithm,
+            model_params=yaml.safe_load(open(self.config.params_path, "r")),
+        )
+
+        # fit model
+        self.logger.info("Fitting model...")
+        model.fit(X_train, y_train)
+
+        # evaluate model
+        scores = model.evaluate(X_test, y_test)
+        self.logger.info("Evaluation scores:\n%s", scores)
+
+        # save model
+        model.save(self.config.output_path)
+
+        # save feature importance
+        model.feature_importance(cols).to_csv(
+            os.path.join(self.config.output_path, "importance.csv"))

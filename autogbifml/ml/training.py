@@ -6,7 +6,6 @@ from sklearnex import patch_sklearn
 
 patch_sklearn()
 
-import matplotlib.figure
 import mlflow
 import optuna
 import joblib
@@ -15,6 +14,7 @@ from pydantic import BaseModel
 import numpy as np
 import pandas as pd
 import matplotlib
+import matplotlib.figure
 import matplotlib.pyplot as plt
 
 from xgboost import XGBClassifier
@@ -45,6 +45,41 @@ class AlgorithmEnum(Enum):
     DECISION_TREE = "decision_tree"
 
 
+class DataLoader:
+
+    def read_parquet(self, path: str):
+        # load dataset
+        df = pd.read_parquet(path)
+
+        # derive date features
+        df["ts_year"] = df["ts"].dt.year
+        df["ts_month"] = df["ts"].dt.month
+        df["ts_day"] = df["ts"].dt.day
+
+        # create X and y
+        return df.drop(columns=["zone_id", "ts", "target"]), df["target"]
+
+    def fit_transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        # create preprocessor
+        self.preprocessor = ColumnTransformer(transformers=[
+            ("passthrough", "passthrough",
+             [col for col in X.columns if col.startswith("ts_")]),
+            ("numerical_encoder", MinMaxScaler(),
+             [col for col in X.columns if not col.startswith("ts_")]),
+        ])
+
+        return self.preprocessor.fit_transform(X)
+
+    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
+        return self.preprocessor.transform(X)
+
+    def load(self, input_path: str):
+        self.preprocessor = joblib.load(input_path)
+
+    def save(self, output_path: str):
+        joblib.dump(self.preprocessor, output_path)
+
+
 class Trainer:
 
     def __init__(self, algorithm: AlgorithmEnum, model_params: dict) -> None:
@@ -62,6 +97,20 @@ class Trainer:
             raise ValueError("Model not created")
 
         return self.model.predict(X)
+
+    def evaluate(self, X, y) -> dict:
+        if self.model == None:
+            raise ValueError("Model not created")
+
+        y_pred = self.model.predict(X)
+        return {
+            "accuracy": accuracy_score(y, y_pred),
+            "precision": precision_score(y, y_pred),
+            "recall": recall_score(y, y_pred),
+            "f1": f1_score(y, y_pred),
+            "kappa": cohen_kappa_score(y, y_pred),
+            "mcc": matthews_corrcoef(y, y_pred),
+        }
 
     def create_model(self, params: dict):
         if self.algorithm == AlgorithmEnum.DECISION_TREE:
@@ -93,12 +142,23 @@ class Trainer:
             self.model.save_model(
                 os.path.join(output_path, "xgboost_model.cbm"))
 
-    def feature_importance(self, feature_names: list[str]) -> str:
+    def load(self, input_path: str):
+        if self.algorithm == AlgorithmEnum.DECISION_TREE or self.algorithm == AlgorithmEnum.RANDOM_FOREST:
+            self.model = joblib.load(input_path)
+
+        elif self.algorithm == AlgorithmEnum.XGBOOST:
+            self.model = XGBClassifier()
+            self.model.load_model(input_path)
+
+        elif self.algorithm == AlgorithmEnum.CATBOOST:
+            self.model = CatBoostClassifier()
+            self.model.load_model(input_path)
+
+    def feature_importance(self, feature_names: list[str]) -> pd.DataFrame:
         return pd.Series(self.model.feature_importances_, index=feature_names) \
                 .sort_values(ascending=False) \
                 .reset_index() \
-                .rename(columns={"index": "variable", 0: "value"}) \
-                .to_csv()
+                .rename(columns={"index": "variable", 0: "value"})
 
 
 class OptunaObjectiveOptions(BaseModel):
@@ -116,6 +176,7 @@ class OptunaObjective:
     def __init__(self, config: OptunaObjectiveOptions) -> None:
         self.config = config
         self.logger = init_logger("OptunaObjective")
+        self.loader = DataLoader()
 
     def __call__(self, trial: optuna.Trial) -> Any:
         with mlflow.start_run(run_name=f"trial-{trial.number}"):
@@ -149,8 +210,8 @@ class OptunaObjective:
                 y_train, y_test = self.y.iloc[train_idx], self.y.iloc[test_idx]
 
                 # preprocess X
-                X_train = self.preprocessor.fit_transform(X_train)
-                X_test = self.preprocessor.transform(X_test)
+                X_train = self.loader.fit_transform(X_train)
+                X_test = self.loader.transform(X_test)
 
                 # fit model
                 clf = Trainer(self.config.algorithm, trial_params)
@@ -169,7 +230,7 @@ class OptunaObjective:
 
                 # feature importance
                 mlflow.log_text(
-                    clf.feature_importance(self.X.columns),
+                    clf.feature_importance(self.X.columns).to_csv(),
                     f"feature_importance_fold_{fold_i + 1}.csv")
 
                 # plot confusion matrix
@@ -188,7 +249,7 @@ class OptunaObjective:
                 PrecisionRecallDisplay.from_predictions(y_test, y_pred, ax=ax)
                 mlflow.log_figure(fig,
                                   f"precision_recall_fold_{fold_i + 1}.png")
-                
+
                 # close all matplotlib windows
                 plt.close("all")
 
@@ -200,25 +261,7 @@ class OptunaObjective:
             return np.mean(scores["mcc"])
 
     def load_data(self) -> None:
-        # load dataset
-        df = pd.read_parquet(self.config.dataset_path)
-
-        # derive date features
-        df["ts_year"] = df["ts"].dt.year
-        df["ts_month"] = df["ts"].dt.month
-        df["ts_day"] = df["ts"].dt.day
-
-        # create X and y
-        self.X = df.drop(columns=["zone_id", "ts", "target"])
-        self.y = df["target"]
-
-        # create preprocessor
-        self.preprocessor = ColumnTransformer(transformers=[
-            ("passthrough", "passthrough",
-             [col for col in self.X.columns if col.startswith("ts_")]),
-            ("numerical_encoder", MinMaxScaler(),
-             [col for col in self.X.columns if not col.startswith("ts_")]),
-        ])
+        self.X, self.y = self.loader.read_parquet(self.config.dataset_path)
 
     def get_param_grid(self, trial: optuna.Trial) -> dict:
         # positive-negative class ratio
@@ -241,7 +284,8 @@ class OptunaObjective:
                     trial.suggest_int("max_leaf_nodes", 3, 26),
 
                 # fixed parameters
-                "n_jobs": self.config.jobs,
+                "n_jobs":
+                    self.config.jobs,
                 "random_state":
                     self.config.random_seed,
                 "class_weight": {
@@ -266,7 +310,8 @@ class OptunaObjective:
                     trial.suggest_categorical("max_features_2", [None, "sqrt"]),
 
                 # fixed parameters
-                "n_jobs": self.config.jobs,
+                "n_jobs":
+                    self.config.jobs,
                 "random_state":
                     self.config.random_seed,
                 "class_weight": {
