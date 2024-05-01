@@ -51,13 +51,19 @@ class DataLoader:
         # load dataset
         df = pd.read_parquet(path)
 
+        # derive ts columns
+        df = self.derive(df)
+
+        # create X and y
+        return df.drop(columns=["zone_id", "ts", "target"]), df["target"]
+    
+    def derive(self, df: pd.DataFrame):
         # derive date features
         df["ts_year"] = df["ts"].dt.year
         df["ts_month"] = df["ts"].dt.month
         df["ts_day"] = df["ts"].dt.day
 
-        # create X and y
-        return df.drop(columns=["zone_id", "ts", "target"]), df["target"]
+        return df
 
     def fit_transform(self, X: pd.DataFrame) -> pd.DataFrame:
         # create preprocessor
@@ -97,6 +103,12 @@ class Trainer:
             raise ValueError("Model not created")
 
         return self.model.predict(X)
+    
+    def predict_proba(self, X):
+        if self.model == None:
+            raise ValueError("Model not created")
+
+        return self.model.predict_proba(X)
 
     def evaluate(self, X, y) -> dict:
         if self.model == None:

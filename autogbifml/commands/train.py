@@ -148,6 +148,9 @@ class TrainCommand:
         scores = model.evaluate(X_test, y_test)
         self.logger.info("Evaluation scores:\n%s", scores)
 
+        # save loader
+        loader.save(os.path.join(self.config.output_path, "loader.joblib"))
+
         # save model
         model.save(self.config.output_path)
 

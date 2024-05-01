@@ -198,6 +198,40 @@ def main():
     parser_predict = subparsers.add_parser(
         "predict", help="Run predictions on a single model")
     parser_predict.set_defaults(func=PredictCommand())
+    parser_predict.add_argument(
+        "output_file",
+        type=str,
+        help="Path to store the predicted shapefile")
+    parser_predict.add_argument(
+        "--algorithm",
+        type=str,
+        required=True,
+        choices=["xgboost", "catboost", "random_forest", "decision_tree"],
+        help="Algorithm used to train the model")
+    parser_predict.add_argument(
+        "--saved-model-file",
+        type=str,
+        required=True,
+        help="Path to saved model file"
+    )
+    parser_predict.add_argument(
+        "--saved-loader-file",
+        type=str,
+        required=True,
+        help="Path to saved loader file"
+    )
+    parser_predict.add_argument(
+        "--polygon-file",
+        type=str,
+        required=True,
+        help="Path to zone polygon file"
+    )
+    parser_predict.add_argument(
+        "--dataset-file",
+        type=str,
+        required=True,
+        help="Path to a dataset file to predict"
+    )
 
     # parse CLI
     args = parser.parse_args()
