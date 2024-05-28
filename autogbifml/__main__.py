@@ -7,6 +7,7 @@ from commands import (
     PreprocessZoneIDCommand,
     PreprocessZonalStatsCommand,
     PreprocessSplitDatasetCommand,
+    PreprocessFeatureSelectionCommand,
     TuneCommand,
     TrainCommand,
     PredictCommand,
@@ -44,90 +45,11 @@ def main():
         "preprocess", help="Preprocess GBIF and Copernicus Marine data")
     subparser_preprocess = parser_preprocess.add_subparsers()
 
-    # gbif
-    parser_gbif = subparser_preprocess.add_parser(
-        "occurence", help="Preprocess GBIF data to simple occurence data")
-    parser_gbif.set_defaults(func=PreprocessGBIFCommand())
-    parser_gbif.add_argument(
-        "input_path",
-        type=str,
-        help="Path to DarwinCore ZIP containing the occurence dataset")
-    parser_gbif.add_argument(
-        "output_path",
-        type=str,
-        help="Output filename to summarized GBIF occurence data")
-
-    # zone-id
-    parser_gbif = subparser_preprocess.add_parser(
-        "zone-id", help="Adds zone id to existing zone polygon grid Shapefile")
-    parser_gbif.set_defaults(func=PreprocessZoneIDCommand())
-    parser_gbif.add_argument(
-        "input_path",
-        type=str,
-        help="Path to Shapefile containing the grid or zone to calculate the zonal statistics from"
-    )
-    parser_gbif.add_argument(
-        "output_path", type=str, help="Output Shapefile path")
-
-    # zonal statistics and occurence
-    parser_copernicus = subparser_preprocess.add_parser(
-        "zonal-stats",
-        help="Preprocess GBIF occurence data and Copernicus Marine raster data to zonal statistics"
-    )
-    parser_copernicus.set_defaults(func=PreprocessZonalStatsCommand())
-    parser_copernicus.add_argument(
-        "occurence_path", type=str, help="Path to simple GBIF occurence data")
-    parser_copernicus.add_argument(
-        "zone_path",
-        type=str,
-        help="Path to zone polygon Shapefile (it must have ZONE_ID in the attribute table)"
-    )
-    parser_copernicus.add_argument(
-        "raster_path",
-        type=str,
-        help="Path to a directory containing netCDF files")
-    parser_copernicus.add_argument(
-        "output_path",
-        type=str,
-        help="Output path to save the zonal statistics dataset")
-
-    parser_copernicus.add_argument(
-        "--downsample",
-        type=str,
-        choices=["none", "weekly", "monthly"],
-        default="none",
-        help="Time frequency to downsample to (default: none)")
-    parser_copernicus.add_argument(
-        "--temp-dir",
-        type=str,
-        help="Path to temporary directory to store intermediate files")
-
-    # split dataset
-    parser_split = subparser_preprocess.add_parser(
-        "split", help="Samples and split dataset into train and test sets")
-    parser_split.set_defaults(func=PreprocessSplitDatasetCommand())
-    parser_split.add_argument(
-        "dataset_file",
-        type=str,
-        help="Path to Parquet file containing the full zonal statistics data")
-    parser_split.add_argument(
-        "output_path",
-        type=str,
-        help="Output folder for the train and test split")
-
-    parser_split.add_argument(
-        "--test-size",
-        type=float,
-        default=0.2,
-        help="Test size in proportion of the dataset (default: 0.2)")
-    parser_split.add_argument(
-        "--stratify",
-        action='store_true',
-        help="Perform stratified sampling (default: True)")
-    parser_split.add_argument(
-        "--undersample",
-        action='store_true',
-        help="Perform undersampling (default: False)")
+    PreprocessGBIFCommand.add_parser(subparser_preprocess)
+    PreprocessZoneIDCommand.add_parser(subparser_preprocess)
+    PreprocessZonalStatsCommand.add_parser(subparser_preprocess)
+    PreprocessSplitDatasetCommand.add_parser(subparser_preprocess)
+    PreprocessFeatureSelectionCommand.add_parser(subparser_preprocess)
 
     # --- tune command
     parser_tune = subparsers.add_parser(
@@ -199,9 +121,7 @@ def main():
         "predict", help="Run predictions on a single model")
     parser_predict.set_defaults(func=PredictCommand())
     parser_predict.add_argument(
-        "output_file",
-        type=str,
-        help="Path to store the predicted shapefile")
+        "output_file", type=str, help="Path to store the predicted shapefile")
     parser_predict.add_argument(
         "--algorithm",
         type=str,
@@ -212,26 +132,22 @@ def main():
         "--saved-model-file",
         type=str,
         required=True,
-        help="Path to saved model file"
-    )
+        help="Path to saved model file")
     parser_predict.add_argument(
         "--saved-loader-file",
         type=str,
         required=True,
-        help="Path to saved loader file"
-    )
+        help="Path to saved loader file")
     parser_predict.add_argument(
         "--polygon-file",
         type=str,
         required=True,
-        help="Path to zone polygon file"
-    )
+        help="Path to zone polygon file")
     parser_predict.add_argument(
         "--dataset-file",
         type=str,
         required=True,
-        help="Path to a dataset file to predict"
-    )
+        help="Path to a dataset file to predict")
 
     # parse CLI
     args = parser.parse_args()
