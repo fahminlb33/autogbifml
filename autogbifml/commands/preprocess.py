@@ -13,7 +13,6 @@ from joblib import Parallel, delayed
 from pydantic import BaseModel
 from sklearn.model_selection import train_test_split
 from sklearn.feature_selection import SelectKBest, SelectPercentile, mutual_info_classif
-from imblearn.under_sampling import RandomUnderSampler
 
 from infrastructure.logger import init_logger
 from ml.preprocessing import ZonalProcessor, ZonalProcessorOptions, DownsampleEnum
@@ -273,80 +272,83 @@ class PreprocessZonalStatsCommand:
 
 
 # ----------------------------------------------------------------------------
-#  SPLIT DATASET
+#  MERGE DATASET AND PERFORM SAMPLING
 # ----------------------------------------------------------------------------
 
 
-class PreprocessSplitDatasetCommandOptions(BaseModel):
-    dataset_file: str
+class PreprocessMergeDatasetOptions(BaseModel):
+    dataset_path: str
     output_path: str
 
     test_size: float = 0.2
-    stratify: bool = True
-    undersample: bool = False
 
-
-class PreprocessSplitDatasetCommand:
-
+class PreprocessMergeDatasetCommand:
     def __init__(self) -> None:
-        self.logger = init_logger("PreprocessSplitDatasetCommand")
+        self.logger = init_logger("PreprocessMergeDatasetCommand")
 
     @staticmethod
     def add_parser(subparser: _SubParsersAction):
         parser: ArgumentParser = subparser.add_parser(
-            "split", help="Samples and split dataset into train and test sets")
-        parser.set_defaults(func=PreprocessSplitDatasetCommand())
+            "merge", help="Samples and split dataset into train and test sets")
+        parser.set_defaults(func=PreprocessMergeDatasetCommand())
         parser.add_argument(
-            "dataset_file",
+            "dataset_path",
             type=str,
-            help="Path to Parquet file containing the full zonal statistics data"
+            help="Path to directory  containing the full zonal statistics data asParquet file"
         )
         parser.add_argument(
             "output_path",
             type=str,
             help="Output folder for the train and test split")
-
+        
         parser.add_argument(
             "--test-size",
             type=float,
             default=0.2,
             help="Test size in proportion of the dataset (default: 0.2)")
-        parser.add_argument(
-            "--stratify",
-            action='store_true',
-            help="Perform stratified sampling (default: True)")
-        parser.add_argument(
-            "--undersample",
-            action='store_true',
-            help="Perform undersampling (default: False)")
-
+    
     def __call__(self, args) -> None:
-        self.config = PreprocessSplitDatasetCommandOptions(**vars(args))
+        self.config = PreprocessMergeDatasetOptions(**vars(args))
 
         # load dataset
-        self.logger.info("Loading dataset...")
-        df = pd.read_parquet(self.config.dataset_file)
-        self.logger.info("Dataset loaded! Rows: %d", len(df))
+        self.logger.info("Merging all variables...")
+        data_files = glob.glob(f"{self.config.dataset_path}/*.parquet")
 
-        # split features
-        X, y = df.drop(columns=["target"]), df["target"]
+        # first parquet as reference
+        min_samples = float("inf")
+        all_dfs = []
+        for f in data_files:
+            # get country from filename
+            country = os.path.splitext(os.path.basename(f))[0]
 
-        # should undersample?
-        if self.config.undersample:
-            rus = RandomUnderSampler(random_state=42)
-            X, y = rus.fit_resample(X, y)
+            # read next dataset
+            df_temp = pd.read_parquet(f).assign(country=country)
 
-            self.logger.info("Dataset undersampling result: %d", len(X))
+            # update
+            min_samples = min(min_samples, df_temp[df_temp["target"] == 0].shape[0], df_temp[df_temp["target"] == 1].shape[0])
+            all_dfs.append(df_temp)
+
+            self.logger.info("Found %d rows in %s. Proportions: %s", df_temp.shape[0], country, df_temp["target"].value_counts())
+
+        # undersample
+        sampled_dfs = []
+        for df in all_dfs:
+            sampled_dfs.append(df[df["target"] == 0].sample(min_samples))
+            sampled_dfs.append(df[df["target"] == 1].sample(min_samples))
+
+        # concat all
+        df_final = pd.concat(sampled_dfs, ignore_index=True)
+        self.logger.info("Columns: %s", df_final.columns.values)
+        self.logger.info("Statistics: %s", df_final[["country", "target"]].value_counts())
 
         # split dataset
-        if self.config.stratify:
-            self.logger.info("Using stratified sampling...")
-            df_train, df_test = train_test_split(
-                X.assign(target=y), test_size=self.config.test_size, stratify=y)
-        else:
-            self.logger.info("Not using stratified sampling...")
-            df_train, df_test = train_test_split(
-                X.assign(target=y), test_size=self.config.test_size)
+        self.logger.info("Using stratified sampling...")
+        df_train, df_test = train_test_split(df_final, test_size=self.config.test_size, stratify=df_final[["country", "target"]])
+
+        # split statistics
+        self.logger.info("Splitting statistics...")
+        self.logger.info("TRAIN %s", df_train[["country", "target"]].value_counts())
+        self.logger.info("TEST %s", df_test[["country", "target"]].value_counts())
 
         # save dataset
         self.logger.info("Saving dataset...")
@@ -356,6 +358,7 @@ class PreprocessSplitDatasetCommand:
         df_test.to_parquet(
             os.path.join(self.config.output_path, "test.parquet"),
             engine="pyarrow")
+        
 
 
 # ----------------------------------------------------------------------------
@@ -424,7 +427,7 @@ class PreprocessFeatureSelectionCommand:
         self.logger.info("Dataset loaded! Rows: %d", len(df))
 
         # split features
-        X, y = df.drop(columns=["zone_id", "ts", "target"]), df["target"]
+        X, y = df.drop(columns=["zone_id", "ts", "target", "country"]), df["target"]
         self.logger.info("Input features count: %d", X.shape[1])
 
         # check strategy
@@ -452,7 +455,7 @@ class PreprocessFeatureSelectionCommand:
         self.logger.info("Selected features: %s", features)
 
         # apply feature selection
-        all_features = ["zone_id", "ts"]
+        all_features = ["zone_id"]
         all_features.extend(features)
         all_features.extend(["target"])
 

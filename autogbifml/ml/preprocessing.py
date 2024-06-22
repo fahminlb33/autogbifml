@@ -80,7 +80,7 @@ class ZonalProcessor:
                         time=date, depth=self.raster_depth)
 
                 # calculate zonal statistics
-                zs = xrs.zonal_stats(self.zonal_mask, zs, zone_ids=self.df_zone["ZONE_ID"]) \
+                zs = xrs.zonal_stats(self.zonal_mask, zs, zone_ids=self.df_zone["ZONE_ID"], stats_funcs=["mean", "sum", "count"]) \
                     .dropna() \
                     .drop(columns=["count"]) \
                     .add_prefix(f"{variable}_") \
@@ -177,11 +177,8 @@ class ZonalProcessor:
         self.df_zone = gpd.read_file(self.config.zone_file)
 
         # check width, height
-        w = self.ds_raster[self.raster_variables[0]].shape[1]
-        h = self.ds_raster[self.raster_variables[0]].shape[2]
-        if self.raster_has_depth:
-            w = self.ds_raster[self.raster_variables[0]].shape[2]
-            h = self.ds_raster[self.raster_variables[0]].shape[3]
+        h = self.ds_raster.coords["latitude"].shape[0]
+        w = self.ds_raster.coords["longitude"].shape[0]
 
         # create canvas as mask
         canvas = ds.Canvas(

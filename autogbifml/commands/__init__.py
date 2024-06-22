@@ -1,4 +1,4 @@
 from commands.download import DownloadCommand
-from commands.preprocess import PreprocessGBIFCommand, PreprocessZoneIDCommand, PreprocessZonalStatsCommand, PreprocessSplitDatasetCommand, PreprocessFeatureSelectionCommand
+from commands.preprocess import PreprocessGBIFCommand, PreprocessZoneIDCommand, PreprocessZonalStatsCommand, PreprocessMergeDatasetCommand, PreprocessFeatureSelectionCommand
 from commands.train import TuneCommand, TrainCommand
 from commands.predict import PredictCommand

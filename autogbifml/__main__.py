@@ -6,7 +6,7 @@ from commands import (
     PreprocessGBIFCommand,
     PreprocessZoneIDCommand,
     PreprocessZonalStatsCommand,
-    PreprocessSplitDatasetCommand,
+    PreprocessMergeDatasetCommand,
     PreprocessFeatureSelectionCommand,
     TuneCommand,
     TrainCommand,
@@ -48,7 +48,7 @@ def main():
     PreprocessGBIFCommand.add_parser(subparser_preprocess)
     PreprocessZoneIDCommand.add_parser(subparser_preprocess)
     PreprocessZonalStatsCommand.add_parser(subparser_preprocess)
-    PreprocessSplitDatasetCommand.add_parser(subparser_preprocess)
+    PreprocessMergeDatasetCommand.add_parser(subparser_preprocess)
     PreprocessFeatureSelectionCommand.add_parser(subparser_preprocess)
 
     # --- tune command
@@ -56,7 +56,7 @@ def main():
         "tune", help="Perform hyperparameter tuning using Optuna")
     parser_tune.set_defaults(func=TuneCommand())
     parser_tune.add_argument(
-        "dataset_path", type=str, help="Path to a training dataset file")
+        "dataset_file", type=str, help="Path to a training dataset file")
     parser_tune.add_argument(
         "output_path",
         type=str,
@@ -82,9 +82,9 @@ def main():
         action="store_true",
         help="Shuffle the dataset before split")
     parser_tune.add_argument(
-        "--db-path",
+        "--storage",
         type=str,
-        default="tune.db",
+        default="sqlite:///tune.db",
         help="Path to store optuna study database")
     parser_tune.add_argument(
         "--tracking-url",
