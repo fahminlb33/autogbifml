@@ -38,6 +38,9 @@ class TuneCommand:
         # parse args
         self.config = TuneCommandOptions(**vars(args))
 
+        # create output dir
+        os.makedirs(self.config.output_path, exist_ok=True)
+
         # set mlflow tracking
         if self.config.tracking_url:
             self.logger.info(
