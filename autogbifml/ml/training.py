@@ -52,7 +52,7 @@ class DataLoader:
         df = pd.read_parquet(path)
 
         # create X and y
-        return df.drop(columns=["zone_id", "ts", "target", "country"]), df["target"]
+        return df.drop(columns=["zone_id", "ts", "target", "country"], errors="ignore"), df["target"]
 
     def fit_transform(self, X: pd.DataFrame) -> pd.DataFrame:
         # create preprocessor
