@@ -26,6 +26,7 @@ class PredictCommandOptions(BaseModel):
 
     jobs: int = 1
 
+
 class PredictCommand:
 
     def __init__(self) -> None:
@@ -79,18 +80,17 @@ class PredictCommand:
             y_pred = model.predict(X)
 
             # create series
-            pred_series.append(pd.Series(y_pred, name=time.strftime("%Y-%m-%d"), index=df_step.index))
+            pred_series.append(
+                pd.Series(
+                    y_pred, name=time.strftime("%Y-%m-%d"),
+                    index=df_step.index))
 
         # construct prediction dataframe
         df_pred = pd.concat(pred_series, axis=1)
         df_geom_pred = df_geom[["ZONE_ID", "geometry"]].copy()
         df_geom_pred = df_geom_pred.merge(df_pred, left_on="ZONE_ID", right_index=True, how="left") \
             .fillna(0)
-        
-        print(df_geom_pred)
 
         # save to shapefile
         self.logger.info("Saving polygon...")
         df_geom_pred.to_file(self.config.output_file, driver="ESRI Shapefile")
-
-        

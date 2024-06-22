@@ -14,7 +14,7 @@ from ml.training import (init_matplotlib, AlgorithmEnum, OptunaObjective,
 
 
 class TuneCommandOptions(BaseModel):
-    dataset_path: str
+    dataset_file: str
     output_path: str
     name: str
     algorithm: AlgorithmEnum
@@ -23,7 +23,7 @@ class TuneCommandOptions(BaseModel):
     cv: int = 10
     shuffle: bool = True
     random_seed: int = 21
-    db_path: Optional[str] = "tune.db"
+    storage: Optional[str] = "tune.db"
     tracking_url: Optional[str] = None
     jobs: int = 1
 
@@ -48,7 +48,7 @@ class TuneCommand:
         objective = OptunaObjective(
             OptunaObjectiveOptions(
                 algorithm=self.config.algorithm,
-                dataset_path=self.config.dataset_path,
+                dataset_file=self.config.dataset_file,
                 cv=self.config.cv,
                 shuffle=self.config.shuffle,
                 random_seed=self.config.random_seed,
@@ -66,7 +66,7 @@ class TuneCommand:
         study = optuna.create_study(
             direction="maximize",
             study_name=self.config.name,
-            storage=f"sqlite:///{self.config.db_path}",
+            storage=self.config.storage,
             load_if_exists=True)
 
         # start optimization
@@ -137,7 +137,7 @@ class TrainCommand:
         # create trainer
         model = Trainer(
             algorithm=self.config.algorithm,
-            model_params=yaml.safe_load(open(self.config.params_path, "r")),
+            model_params=yaml.safe_load(open(self.config.params_path, "r")) or {},
         )
 
         # fit model
@@ -146,7 +146,11 @@ class TrainCommand:
 
         # evaluate model
         scores = model.evaluate(X_test, y_test)
+        scores = {key: round(value, 2) for key, value in scores.items()}
         self.logger.info("Evaluation scores:\n%s", scores)
+
+        # create output dir
+        os.makedirs(self.config.output_path, exist_ok=True)
 
         # save loader
         loader.save(os.path.join(self.config.output_path, "loader.joblib"))

@@ -26,7 +26,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import KFold
 from sklearn.metrics import (accuracy_score, precision_score, recall_score,
-                             f1_score, cohen_kappa_score, matthews_corrcoef,
+                             f1_score, matthews_corrcoef,
                              ConfusionMatrixDisplay, RocCurveDisplay,
                              PrecisionRecallDisplay)
 
@@ -51,27 +51,14 @@ class DataLoader:
         # load dataset
         df = pd.read_parquet(path)
 
-        # derive ts columns
-        df = self.derive(df)
-
         # create X and y
-        return df.drop(columns=["zone_id", "ts", "target"]), df["target"]
-    
-    def derive(self, df: pd.DataFrame):
-        # derive date features
-        df["ts_year"] = df["ts"].dt.year
-        df["ts_month"] = df["ts"].dt.month
-        df["ts_day"] = df["ts"].dt.day
-
-        return df
+        return df.drop(columns=["zone_id", "ts", "target", "country"]), df["target"]
 
     def fit_transform(self, X: pd.DataFrame) -> pd.DataFrame:
         # create preprocessor
         self.preprocessor = ColumnTransformer(transformers=[
-            ("passthrough", "passthrough",
-             [col for col in X.columns if col.startswith("ts_")]),
             ("numerical_encoder", MinMaxScaler(),
-             [col for col in X.columns if not col.startswith("ts_")]),
+             [col for col in X.columns]),
         ])
 
         return self.preprocessor.fit_transform(X)
@@ -103,7 +90,7 @@ class Trainer:
             raise ValueError("Model not created")
 
         return self.model.predict(X)
-    
+
     def predict_proba(self, X):
         if self.model == None:
             raise ValueError("Model not created")
@@ -120,7 +107,6 @@ class Trainer:
             "precision": precision_score(y, y_pred),
             "recall": recall_score(y, y_pred),
             "f1": f1_score(y, y_pred),
-            "kappa": cohen_kappa_score(y, y_pred),
             "mcc": matthews_corrcoef(y, y_pred),
         }
 
@@ -175,7 +161,7 @@ class Trainer:
 
 class OptunaObjectiveOptions(BaseModel):
     algorithm: AlgorithmEnum
-    dataset_path: str
+    dataset_file: str
 
     jobs: int = 1
     cv: int = 10
@@ -204,7 +190,6 @@ class OptunaObjective:
                 "precision": [],
                 "recall": [],
                 "f1": [],
-                "kappa": [],
                 "mcc": []
             }
 
@@ -237,7 +222,6 @@ class OptunaObjective:
                 scores["precision"].append(precision_score(y_test, y_pred))
                 scores["recall"].append(recall_score(y_test, y_pred))
                 scores["f1"].append(f1_score(y_test, y_pred))
-                scores["kappa"].append(cohen_kappa_score(y_test, y_pred))
                 scores["mcc"].append(matthews_corrcoef(y_test, y_pred))
 
                 # feature importance
@@ -273,7 +257,7 @@ class OptunaObjective:
             return np.mean(scores["mcc"])
 
     def load_data(self) -> None:
-        self.X, self.y = self.loader.read_parquet(self.config.dataset_path)
+        self.X, self.y = self.loader.read_parquet(self.config.dataset_file)
 
     def get_param_grid(self, trial: optuna.Trial) -> dict:
         # positive-negative class ratio
