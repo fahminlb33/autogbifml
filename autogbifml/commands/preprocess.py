@@ -411,8 +411,8 @@ class PreprocessFeatureSelectionCommand:
         parser.add_argument(
             "--strategy",
             choices=["topk", "percentile", "manual"],
-            default="fpr",
-            help="Feature selection strategy (default: percentile)")
+            default="topk",
+            help="Feature selection strategy (default: topk)")
         parser.add_argument(
             "--features",
             type=str,
@@ -431,9 +431,10 @@ class PreprocessFeatureSelectionCommand:
         self.logger.info("Input features count: %d", X.shape[1])
 
         # check strategy
-        features = self.config.features
+        features = []
         if self.config.strategy == FeatureSelectionStrategyEnum.MANUAL:
             self.logger.info("Using MANUAL strategy...")
+            features = self.config.features.split(",")
         elif self.config.strategy == FeatureSelectionStrategyEnum.PERCENTILE:
             self.logger.info("Using PERCENTILE strategy...")
             selector = SelectPercentile(
