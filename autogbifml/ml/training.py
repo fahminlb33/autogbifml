@@ -280,14 +280,9 @@ class OptunaObjective:
                     trial.suggest_int("max_leaf_nodes", 3, 26),
 
                 # fixed parameters
-                "n_jobs":
-                    self.config.jobs,
                 "random_state":
                     self.config.random_seed,
-                "class_weight": {
-                    0: n_neg / n_pos,
-                    1: 1
-                },
+                "class_weight": "balanced",
             }
 
         elif self.config.algorithm == AlgorithmEnum.RANDOM_FOREST:
@@ -310,10 +305,7 @@ class OptunaObjective:
                     self.config.jobs,
                 "random_state":
                     self.config.random_seed,
-                "class_weight": {
-                    0: n_neg / n_pos,
-                    1: 1
-                },
+                "class_weight": "balanced",
             }
 
         elif self.config.algorithm == AlgorithmEnum.XGBOOST:
