@@ -1,4 +1,0 @@
-[style]
-indent_width = 4
-based_on_style = yapf
-split_before_logical_operator = true

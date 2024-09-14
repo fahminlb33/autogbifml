@@ -1,0 +1,30 @@
+# data and numbers
+pandas
+geopandas
+numpy
+xarray
+xarray-spatial
+pyarrow
+
+# visualization
+datashader
+matplotlib
+seaborn
+
+# machine learning
+catboost
+xgboost
+scikit-learn
+scikit-learn-intelex
+imbalanced-learn
+statsmodels
+
+# utils
+pyyaml
+pydantic
+joblib
+optuna
+mlflow
+
+# development
+ipykernel
