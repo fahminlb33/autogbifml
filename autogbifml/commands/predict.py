@@ -1,6 +1,7 @@
 import os
 import glob
 from typing import Any, Optional
+from argparse import ArgumentParser, _SubParsersAction
 
 import yaml
 import optuna
@@ -12,8 +13,18 @@ import geopandas as gpd
 from pydantic import BaseModel
 
 from infrastructure.logger import init_logger
-from ml.training import (init_matplotlib, AlgorithmEnum, OptunaObjective,
-                         OptunaObjectiveOptions, DataLoader, Trainer)
+from ml.training import (
+    init_matplotlib,
+    AlgorithmEnum,
+    OptunaObjective,
+    OptunaObjectiveOptions,
+    DataLoader,
+    Trainer,
+)
+
+# ----------------------------------------------------------------------------
+#  PERFORMS INFERENCE USING A PRETRAINED MODEL
+# ----------------------------------------------------------------------------
 
 
 class PredictCommandOptions(BaseModel):
@@ -28,10 +39,47 @@ class PredictCommandOptions(BaseModel):
 
 
 class PredictCommand:
-
     def __init__(self) -> None:
         self.logger = init_logger("PredictCommand")
         init_matplotlib()
+
+    @staticmethod
+    def add_parser(subparser: _SubParsersAction):
+        parser: ArgumentParser = subparser.add_parser(
+            "predict", help="Run predictions on a single model"
+        )
+        parser.set_defaults(func=PredictCommand())
+        parser.add_argument(
+            "output_file", type=str, help="Path to store the predicted shapefile"
+        )
+        parser.add_argument(
+            "--algorithm",
+            type=str,
+            required=True,
+            choices=["xgboost", "catboost", "random_forest", "decision_tree"],
+            help="Algorithm used to train the model",
+        )
+        parser.add_argument(
+            "--saved-model-file",
+            type=str,
+            required=True,
+            help="Path to saved model file",
+        )
+        parser.add_argument(
+            "--saved-loader-file",
+            type=str,
+            required=True,
+            help="Path to saved loader file",
+        )
+        parser.add_argument(
+            "--polygon-file", type=str, required=True, help="Path to zone polygon file"
+        )
+        parser.add_argument(
+            "--dataset-file",
+            type=str,
+            required=True,
+            help="Path to a dataset file to predict",
+        )
 
     def __call__(self, args) -> Any:
         # parse args
@@ -81,15 +129,15 @@ class PredictCommand:
 
             # create series
             pred_series.append(
-                pd.Series(
-                    y_pred, name=time.strftime("%Y-%m-%d"),
-                    index=df_step.index))
+                pd.Series(y_pred, name=time.strftime("%Y-%m-%d"), index=df_step.index)
+            )
 
         # construct prediction dataframe
         df_pred = pd.concat(pred_series, axis=1)
         df_geom_pred = df_geom[["ZONE_ID", "geometry"]].copy()
-        df_geom_pred = df_geom_pred.merge(df_pred, left_on="ZONE_ID", right_index=True, how="left") \
-            .fillna(0)
+        df_geom_pred = df_geom_pred.merge(
+            df_pred, left_on="ZONE_ID", right_index=True, how="left"
+        ).fillna(0)
 
         # save to shapefile
         self.logger.info("Saving polygon...")

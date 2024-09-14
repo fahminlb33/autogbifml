@@ -28,23 +28,25 @@ class PreprocessGBIFCommandOptions(BaseModel):
 
 
 class PreprocessGBIFCommand:
-
     def __init__(self) -> None:
         self.logger = init_logger("PreprocessGBIFCommand")
 
     @staticmethod
     def add_parser(subparser: _SubParsersAction):
         parser: ArgumentParser = subparser.add_parser(
-            "occurence", help="Preprocess GBIF data to simple occurence data")
+            "occurence", help="Preprocess GBIF data to simple occurence data"
+        )
         parser.set_defaults(func=PreprocessGBIFCommand())
         parser.add_argument(
             "input_path",
             type=str,
-            help="Path to DarwinCore ZIP containing the occurence dataset")
+            help="Path to DarwinCore ZIP containing the occurence dataset",
+        )
         parser.add_argument(
             "output_path",
             type=str,
-            help="Output filename to summarized GBIF occurence data")
+            help="Output filename to summarized GBIF occurence data",
+        )
 
     def __call__(self, **kwargs) -> None:
         # parse args
@@ -61,7 +63,7 @@ class PreprocessGBIFCommand:
             with zip_ref.open("occurrence.txt") as occurrence_file:
                 # read occurrence file
                 df = pd.read_csv(occurrence_file, sep="\t")
-                df["ts"] = pd.to_datetime(df["eventDate"], format='ISO8601')
+                df["ts"] = pd.to_datetime(df["eventDate"], format="ISO8601")
 
                 # print min max ts
                 self.logger.info(f"Min ts: {df['ts'].min()}")
@@ -69,18 +71,17 @@ class PreprocessGBIFCommand:
 
                 # if decimalLatitude and decimalLongitude are null, try to use footprintWKT
                 df["latitude"] = df.apply(
-                    PreprocessGBIFCommand.coalesce_coordinate(
-                        "decimalLatitude"),
-                    axis=1)
+                    PreprocessGBIFCommand.coalesce_coordinate("decimalLatitude"), axis=1
+                )
                 df["longitude"] = df.apply(
-                    PreprocessGBIFCommand.coalesce_coordinate(
-                        "decimalLongitude"),
-                    axis=1)
+                    PreprocessGBIFCommand.coalesce_coordinate("decimalLongitude"),
+                    axis=1,
+                )
 
                 # subset dataset
-                df_subset = df[[
-                    "occurrenceID", "ts", "latitude", "longitude", "species"
-                ]]
+                df_subset = df[
+                    ["occurrenceID", "ts", "latitude", "longitude", "species"]
+                ]
 
                 # sort by ts descending
                 df_subset = df_subset.sort_values("ts", ascending=False)
@@ -91,7 +92,6 @@ class PreprocessGBIFCommand:
 
     @staticmethod
     def coalesce_coordinate(col: str) -> float:
-
         def proc(row):
             # if not null, return the value
             if not pd.isnull(row[col]):
@@ -118,23 +118,21 @@ class PreprocessZoneIDCommandOptions(BaseModel):
 
 
 class PreprocessZoneIDCommand:
-
     def __init__(self) -> None:
         self.logger = init_logger("PreprocessZoneIDCommand")
 
     @staticmethod
     def add_parser(subparser: _SubParsersAction):
         parser: ArgumentParser = subparser.add_parser(
-            "zone-id",
-            help="Adds zone id to existing zone polygon grid Shapefile")
+            "zone-id", help="Adds zone id to existing zone polygon grid Shapefile"
+        )
         parser.set_defaults(func=PreprocessZoneIDCommand())
         parser.add_argument(
             "input_path",
             type=str,
-            help="Path to Shapefile containing the grid or zone to calculate the zonal statistics from"
+            help="Path to Shapefile containing the grid or zone to calculate the zonal statistics from",
         )
-        parser.add_argument(
-            "output_path", type=str, help="Output Shapefile path")
+        parser.add_argument("output_path", type=str, help="Output Shapefile path")
 
     def __call__(self, args) -> None:
         # parse args
@@ -169,7 +167,6 @@ class PreprocessZonalStatsCommandOptions(BaseModel):
 
 
 class PreprocessZonalStatsCommand:
-
     def __init__(self) -> None:
         self.logger = init_logger("PreprocessCopernicusCommand")
 
@@ -177,37 +174,38 @@ class PreprocessZonalStatsCommand:
     def add_parser(subparser: _SubParsersAction):
         parser: ArgumentParser = subparser.add_parser(
             "zonal-stats",
-            help="Preprocess GBIF occurence data and Copernicus Marine raster data to zonal statistics"
+            help="Preprocess GBIF occurence data and Copernicus Marine raster data to zonal statistics",
         )
         parser.set_defaults(func=PreprocessZonalStatsCommand())
         parser.add_argument(
-            "occurence_path",
-            type=str,
-            help="Path to simple GBIF occurence data")
+            "occurence_path", type=str, help="Path to simple GBIF occurence data"
+        )
         parser.add_argument(
             "zone_path",
             type=str,
-            help="Path to zone polygon Shapefile (it must have ZONE_ID in the attribute table)"
+            help="Path to zone polygon Shapefile (it must have ZONE_ID in the attribute table)",
         )
         parser.add_argument(
-            "raster_path",
-            type=str,
-            help="Path to a directory containing netCDF files")
+            "raster_path", type=str, help="Path to a directory containing netCDF files"
+        )
         parser.add_argument(
             "output_path",
             type=str,
-            help="Output path to save the zonal statistics dataset")
+            help="Output path to save the zonal statistics dataset",
+        )
 
         parser.add_argument(
             "--downsample",
             type=str,
             choices=["none", "weekly", "monthly"],
             default="none",
-            help="Time frequency to downsample to (default: none)")
+            help="Time frequency to downsample to (default: none)",
+        )
         parser.add_argument(
             "--temp-dir",
             type=str,
-            help="Path to temporary directory to store intermediate files")
+            help="Path to temporary directory to store intermediate files",
+        )
 
     def __call__(self, args) -> None:
         self.config = PreprocessZonalStatsCommandOptions(**vars(args))
@@ -226,12 +224,14 @@ class PreprocessZonalStatsCommand:
                 occurence_file=self.config.occurence_path,
                 zone_file=self.config.zone_path,
                 output_path=self.config.temp_dir,
-                downsample=self.config.downsample) for f in raster_files
+                downsample=self.config.downsample,
+            )
+            for f in raster_files
         ]
 
-        Parallel(
-            n_jobs=self.config.jobs, verbose=1)(
-                delayed(lambda x: ZonalProcessor(x)())(job) for job in jobs)
+        Parallel(n_jobs=self.config.jobs, verbose=1)(
+            delayed(lambda x: ZonalProcessor(x)())(job) for job in jobs
+        )
         self.logger.info("Finished processing zonal statistics")
 
         # merge all temp data to one dataframe
@@ -251,12 +251,12 @@ class PreprocessZonalStatsCommand:
             df_temp = pd.read_parquet(f)
 
             # merge on ZONE_ID
-            df_final = df_final.merge(df_temp, on=["zone_id", "ts"]) \
-                .drop(columns=["target_x"], errors="ignore")
+            df_final = df_final.merge(df_temp, on=["zone_id", "ts"]).drop(
+                columns=["target_x"], errors="ignore"
+            )
 
         # drop extra merge fields
-        df_final.drop(
-            columns=[x for x in df_final.columns if x.startswith("target_")])
+        df_final.drop(columns=[x for x in df_final.columns if x.startswith("target_")])
 
         # rearange columns
         cols = list(x for x in df_final.columns if not x.startswith("target_"))
@@ -282,6 +282,7 @@ class PreprocessMergeDatasetOptions(BaseModel):
 
     test_size: float = 0.2
 
+
 class PreprocessMergeDatasetCommand:
     def __init__(self) -> None:
         self.logger = init_logger("PreprocessMergeDatasetCommand")
@@ -289,24 +290,25 @@ class PreprocessMergeDatasetCommand:
     @staticmethod
     def add_parser(subparser: _SubParsersAction):
         parser: ArgumentParser = subparser.add_parser(
-            "merge", help="Samples and split dataset into train and test sets")
+            "merge", help="Samples and split dataset into train and test sets"
+        )
         parser.set_defaults(func=PreprocessMergeDatasetCommand())
         parser.add_argument(
             "dataset_path",
             type=str,
-            help="Path to directory  containing the full zonal statistics data asParquet file"
+            help="Path to directory  containing the full zonal statistics data asParquet file",
         )
         parser.add_argument(
-            "output_path",
-            type=str,
-            help="Output folder for the train and test split")
-        
+            "output_path", type=str, help="Output folder for the train and test split"
+        )
+
         parser.add_argument(
             "--test-size",
             type=float,
             default=0.2,
-            help="Test size in proportion of the dataset (default: 0.2)")
-    
+            help="Test size in proportion of the dataset (default: 0.2)",
+        )
+
     def __call__(self, args) -> None:
         self.config = PreprocessMergeDatasetOptions(**vars(args))
 
@@ -325,10 +327,19 @@ class PreprocessMergeDatasetCommand:
             df_temp = pd.read_parquet(f).assign(country=country)
 
             # update
-            min_samples = min(min_samples, df_temp[df_temp["target"] == 0].shape[0], df_temp[df_temp["target"] == 1].shape[0])
+            min_samples = min(
+                min_samples,
+                df_temp[df_temp["target"] == 0].shape[0],
+                df_temp[df_temp["target"] == 1].shape[0],
+            )
             all_dfs.append(df_temp)
 
-            self.logger.info("Found %d rows in %s. Proportions: %s", df_temp.shape[0], country, df_temp["target"].value_counts())
+            self.logger.info(
+                "Found %d rows in %s. Proportions: %s",
+                df_temp.shape[0],
+                country,
+                df_temp["target"].value_counts(),
+            )
 
         # undersample
         sampled_dfs = []
@@ -339,11 +350,17 @@ class PreprocessMergeDatasetCommand:
         # concat all
         df_final = pd.concat(sampled_dfs, ignore_index=True)
         self.logger.info("Columns: %s", df_final.columns.values)
-        self.logger.info("Statistics: %s", df_final[["country", "target"]].value_counts())
+        self.logger.info(
+            "Statistics: %s", df_final[["country", "target"]].value_counts()
+        )
 
         # split dataset
         self.logger.info("Using stratified sampling...")
-        df_train, df_test = train_test_split(df_final, test_size=self.config.test_size, stratify=df_final[["country", "target"]])
+        df_train, df_test = train_test_split(
+            df_final,
+            test_size=self.config.test_size,
+            stratify=df_final[["country", "target"]],
+        )
 
         # split statistics
         self.logger.info("Splitting statistics...")
@@ -353,12 +370,11 @@ class PreprocessMergeDatasetCommand:
         # save dataset
         self.logger.info("Saving dataset...")
         df_train.to_parquet(
-            os.path.join(self.config.output_path, "train.parquet"),
-            engine="pyarrow")
+            os.path.join(self.config.output_path, "train.parquet"), engine="pyarrow"
+        )
         df_test.to_parquet(
-            os.path.join(self.config.output_path, "test.parquet"),
-            engine="pyarrow")
-        
+            os.path.join(self.config.output_path, "test.parquet"), engine="pyarrow"
+        )
 
 
 # ----------------------------------------------------------------------------
@@ -382,7 +398,6 @@ class PreprocessFeatureSelectionCommandOptions(BaseModel):
 
 
 class PreprocessFeatureSelectionCommand:
-
     def __init__(self) -> None:
         self.logger = init_logger("PreprocessFeatureSelectionCommand")
 
@@ -390,33 +405,35 @@ class PreprocessFeatureSelectionCommand:
     def add_parser(subparser: _SubParsersAction):
         parser: ArgumentParser = subparser.add_parser(
             "feature_selection",
-            help="Performs feature selection using information gain as the metric"
+            help="Performs feature selection using information gain as the metric",
         )
         parser.set_defaults(func=PreprocessFeatureSelectionCommand())
         parser.add_argument(
             "dataset_file",
             type=str,
-            help="Path to Parquet file containing the full zonal statistics data"
+            help="Path to Parquet file containing the full zonal statistics data",
         )
         parser.add_argument(
-            "output_file",
-            type=str,
-            help="Output file for the selected features")
+            "output_file", type=str, help="Output file for the selected features"
+        )
 
         parser.add_argument(
             "--topk",
             type=int,
             default=10,
-            help="Top-k number of features to select (default: 10)")
+            help="Top-k number of features to select (default: 10)",
+        )
         parser.add_argument(
             "--strategy",
             choices=["topk", "percentile", "manual"],
             default="topk",
-            help="Feature selection strategy (default: topk)")
+            help="Feature selection strategy (default: topk)",
+        )
         parser.add_argument(
             "--features",
             type=str,
-            help="List of features to select (quote and separate by comma)")
+            help="List of features to select (quote and separate by comma)",
+        )
 
     def __call__(self, args) -> None:
         self.config = PreprocessFeatureSelectionCommandOptions(**vars(args))
@@ -438,7 +455,8 @@ class PreprocessFeatureSelectionCommand:
         elif self.config.strategy == FeatureSelectionStrategyEnum.PERCENTILE:
             self.logger.info("Using PERCENTILE strategy...")
             selector = SelectPercentile(
-                mutual_info_classif, percentile=self.config.topk)
+                mutual_info_classif, percentile=self.config.topk
+            )
             _ = selector.fit_transform(X, y)
 
             features = selector.get_feature_names_out()

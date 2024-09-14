@@ -14,8 +14,7 @@ def init_logger(name):
     stdout.setLevel(logging.INFO)
 
     # create formatter
-    formatter = logging.Formatter(
-        "%(name)s: %(asctime)s | %(levelname)s | %(message)s")
+    formatter = logging.Formatter("%(name)s: %(asctime)s | %(levelname)s | %(message)s")
     stdout.setFormatter(formatter)
 
     __LOGGER.addHandler(stdout)
