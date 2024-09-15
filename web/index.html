@@ -1,95 +1,108 @@
 <!doctype html>
 <html lang="en" data-theme="light">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="shortcut icon" href="./assets/img/kodesiana.png" />
 
-    <title>Kemunculan Paus</title>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="shortcut icon" href="./assets/img/kodesiana.png" />
 
-    <link
-      href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="./assets/css/style.css" />
+  <title>Kemunculan Paus</title>
 
-    <script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
-    <script
-      src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"
-      integrity="sha256-NY2a+7GrW++i9IBhowd25bzXcH9BCmBrqYX5i8OxwDQ="
-      crossorigin="anonymous"
-      defer
-    ></script>
-  </head>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet" />
+  <link rel="stylesheet" href="./assets/css/style.css" />
 
-  <body>
-    <main x-data="app">
-      <div id="map"></div>
-      <div class="map-overlay top">
-        <!-- Controls -->
-        <div class="map-overlay-extra">
-          <h2>Kemunculan Paus pada Tahun 2023</h2>
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"
+    integrity="sha256-NY2a+7GrW++i9IBhowd25bzXcH9BCmBrqYX5i8OxwDQ=" crossorigin="anonymous" defer></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet">
+</head>
 
-          <!-- Month Selector -->
-          <p>Bulan: <span x-text="monthText"></span></p>
-          <input
-            id="month-input"
-            type="range"
-            min="5"
-            max="11"
-            step="1"
-            x-model.number.debounce="selectedMonth"
-          />
+<body>
+  <main x-data="app">
+    <div id="map"></div>
+    <!-- Color Scale -->
+    <div class="map-legend">
+      <div id="legend" class="legend">
+        <div>Probabilitas</div>
+        <div class="bar"></div>
+      </div>
+    </div>
+    <div class="map-overlay top">
+      <!-- Controls -->
+      <div class="map-overlay-extra">
+        <h2>Kemunculan Paus pada Tahun 2023</h2>
 
-          <label for="layer-input">Pilih basemap</label>
-          <select id="layer-input" x-model="selectedLayer">
-            <template x-for="value in basemaps" :key="value.key">
-              <option x-bind:value="value.key">
-                <span x-html="value.label"></span>
-              </option>
-            </template>
-          </select>
+        <!-- Month Selector -->
+        <label for="month-input">Bulan: <span x-text="monthText"></span></label>
+
+        <div class="slider-container">
+          <input id="month-input" type="range" min="5" max="11" step="1" x-model.number.debounce="selectedMonth" />
         </div>
 
-        <!-- Color Scale -->
-        <div class="map-overlay-extra">
-          <div id="legend" class="legend">
-            <div>Probabilitas</div>
-            <div class="bar"></div>
-          </div>
-        </div>
+        <hr class="spacing" />
+        <label for="layer-input">Pilih basemap</label>
+        <select id="layer-input" x-model="selectedLayer">
+          <template x-for="value in basemaps" :key="value.key">
+            <option x-bind:value="value.key">
+              <span x-html="value.label"></span>
+            </option>
+          </template>
+        </select>
+      </div>
+      <hr class="divider" />
+      <!-- Data Viewer -->
+      <div class="map-overlay-extra">
+        <h2>Hasil Prediksi</h2>
+        <p x-show="!selectedProps.show">Pilih zona pada peta!</p>
 
-        <!-- Data Viewer -->
-        <div class="map-overlay-extra">
-          <h2>Hasil Prediksi</h2>
-          <p x-show="!selectedProps.show">Pilih zona pada peta!</p>
-          <div x-show="selectedProps.show">
-            <p>Zona: <span x-text="selectedProps.zone_id"></span></p>
+        <!-- Prediction details -->
+        <div x-show="selectedProps.show">
+          <p>Zona: <span x-text="selectedProps.zone_id"></span></p>
 
-            <p>Aktual: <span x-text="selectedProps.target"></span></p>
-            <p>Prediksi: <span x-text="selectedProps.predicted"></span></p>
+          <!-- Prediction -->
+          <p><strong>Prediksi:</strong> <span x-text="selectedProps.predicted"></span></p>
+          <!-- Actual -->
+          <p><strong>Aktual:</strong> <span x-text="selectedProps.target"></span></p>
 
-            <p>Probabilitas: <span x-text="selectedProps.proba"></span></p>
-            <p>Log Probabilitas: <span x-text="selectedProps.proba_log"></span></p>
 
-            <h3>Atribut Zona</h3>
-            <ul>
-              <li>sob_mean: <span x-text="selectedProps.sob_mean"></span></li>
-              <li>sob_sum: <span x-text="selectedProps.sob_sum"></span></li>
-              <li>fe_mean: <span x-text="selectedProps.fe_mean"></span></li>
-              <li>fe_sum: <span x-text="selectedProps.fe_sum"></span></li>
-              <li>so_sum: <span x-text="selectedProps.so_sum"></span></li>
-              <li>po4_mean: <span x-text="selectedProps.po4_mean"></span></li>
-              <li>pbo_mean: <span x-text="selectedProps.pbo_mean"></span></li>
-              <li>pbo_sum: <span x-text="selectedProps.pbo_sum"></span></li>
-              <li>tob_mean: <span x-text="selectedProps.tob_mean"></span></li>
-              <li>tob_sum: <span x-text="selectedProps.tob_sum"></span></li>
-            </ul>
-          </div>
+          <!-- Color-coded Probability -->
+          <p>
+            <strong>Probabilitas:</strong>
+            <span x-text="`${selectedProps.proba}%`" :style="{
+                color: getProbabilityColor(selectedProps.proba)
+              }">
+            </span>
+          </p>
+
+          <!-- Log Probability -->
+          <p><strong>Log Probabilitas:</strong> <span x-text="selectedProps.proba_log"></span></p>
+
+          <!-- Divider -->
+          <hr class="divider" />
+
+          <!-- Zone Attributes -->
+          <h3>Atribut Zona</h3>
+          <ul>
+            <li>sob_mean: <span x-text="selectedProps.sob_mean"></span></li>
+            <li>sob_sum: <span x-text="selectedProps.sob_sum"></span></li>
+            <li>fe_mean: <span x-text="selectedProps.fe_mean"></span></li>
+            <li>fe_sum: <span x-text="selectedProps.fe_sum"></span></li>
+            <li>so_sum: <span x-text="selectedProps.so_sum"></span></li>
+            <li>po4_mean: <span x-text="selectedProps.po4_mean"></span></li>
+            <li>pbo_mean: <span x-text="selectedProps.pbo_mean"></span></li>
+            <li>pbo_sum: <span x-text="selectedProps.pbo_sum"></span></li>
+            <li>tob_mean: <span x-text="selectedProps.tob_mean"></span></li>
+            <li>tob_sum: <span x-text="selectedProps.tob_sum"></span></li>
+          </ul>
         </div>
       </div>
-    </main>
 
-    <script src="./assets/js/app.js"></script>
-  </body>
+    </div>
+  </main>
+
+  <script src="./assets/js/app.js"></script>
+</body>
+
 </html>
