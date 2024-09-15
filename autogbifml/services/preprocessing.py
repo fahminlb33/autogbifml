@@ -10,8 +10,6 @@ import datashader as ds
 
 from pydantic import BaseModel
 
-from infrastructure.logger import init_logger
-
 
 class DownsampleEnum(str, Enum):
     NONE = "none"
@@ -21,7 +19,7 @@ class DownsampleEnum(str, Enum):
 
 class ZonalProcessorOptions(BaseModel):
     raster_file: str
-    occurence_file: str
+    occurrence_file: str
     zone_file: str
     output_path: str
 
@@ -45,11 +43,11 @@ class ZonalProcessor:
 
     def __init__(self, config: ZonalProcessorOptions) -> None:
         self.config = config
-        self.logger = init_logger(f"ZonalProcessor-{os.getpid()}")
+        self.pid = f"ZonalProcessor-{os.getpid()}"
 
     def __call__(self) -> Any:
-        self.logger.info(
-            "Calculating zonal stats for %s", os.path.basename(self.config.raster_file)
+        print(
+            f"{self.pid}: Calculating zonal stats for {os.path.basename(self.config.raster_file)}"
         )
 
         # open dataset
@@ -59,7 +57,7 @@ class ZonalProcessor:
 
         # process each day and variable
         for variable in self.raster_variables:
-            self.logger.info("Processing variable: %s", variable)
+            print(f"{self.pid}: Processing variable: {variable}")
 
             # to store results
             dfs = []
@@ -128,14 +126,14 @@ class ZonalProcessor:
                 f"{self.config.output_path}/zs_{variable}.parquet", engine="pyarrow"
             )
 
-            self.logger.warning("There are %d skipped dates", len(skipped_dates))
-            self.logger.info("Done processing variable: %s", variable)
+            print(f"{self.pid}: There are {len(skipped_dates)} skipped dates")
+            print(f"{self.pid}: Done processing variable: {variable}")
 
     def load_occurence(self):
-        self.logger.info(f"Loading occurence dataset...")
+        print(f"{self.pid}: Loading occurence dataset...")
 
         # load occurence dataset
-        df = pd.read_csv(self.config.occurence_file, parse_dates=["ts"]).drop(
+        df = pd.read_csv(self.config.occurrence_file, parse_dates=["ts"]).drop(
             columns=["species"]
         )
 
@@ -157,10 +155,10 @@ class ZonalProcessor:
             crs="epsg:4326",
         )
 
-        self.logger.info("Found %d unique occurence dates", len(self.occurence_dates))
+        print(f"{self.pid}: Found {len(self.occurence_dates)} unique occurence dates")
 
     def load_raster(self):
-        self.logger.info(f"Loading raster dataset...")
+        print(f"{self.pid}: Loading raster dataset...")
 
         # load raster dataset
         dsr = xr.open_dataset(self.config.raster_file)
@@ -179,12 +177,12 @@ class ZonalProcessor:
 
         self.raster_has_depth = False
         if len(dsr[self.raster_variables[0]].shape) == 4:
-            self.logger.info(f"This raster has depth coordinate!")
+            print(f"{self.pid}: This raster has depth coordinate!")
             self.raster_has_depth = True
             self.raster_depth = dsr[self.raster_variables[0]]["depth"][0]
 
     def load_zonal_mask(self):
-        self.logger.info(f"Loading zonal dataset...")
+        print(f"{self.pid}: Loading zonal dataset...")
 
         # load zone id polygon
         self.df_zone = gpd.read_file(self.config.zone_file)

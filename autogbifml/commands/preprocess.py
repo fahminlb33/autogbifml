@@ -14,8 +14,12 @@ from pydantic import BaseModel
 from sklearn.model_selection import train_test_split
 from sklearn.feature_selection import SelectKBest, SelectPercentile, mutual_info_classif
 
-from infrastructure.logger import init_logger
-from ml.preprocessing import ZonalProcessor, ZonalProcessorOptions, DownsampleEnum
+from services.base import BaseCommand
+from services.preprocessing import (
+    ZonalProcessor,
+    ZonalProcessorOptions,
+    DownsampleEnum,
+)
 
 # ----------------------------------------------------------------------------
 #  CONVERT DARWINCORE TO CSV
@@ -23,29 +27,30 @@ from ml.preprocessing import ZonalProcessor, ZonalProcessorOptions, DownsampleEn
 
 
 class PreprocessGBIFCommandOptions(BaseModel):
-    input_path: str
-    output_path: str
+    input_file: str
+    output_file: str
 
 
-class PreprocessGBIFCommand:
+class PreprocessGBIFCommand(BaseCommand):
     def __init__(self) -> None:
-        self.logger = init_logger("PreprocessGBIFCommand")
+        super(PreprocessGBIFCommand, self).__init__()
 
     @staticmethod
     def add_parser(subparser: _SubParsersAction):
         parser: ArgumentParser = subparser.add_parser(
             "occurence", help="Preprocess GBIF data to simple occurence data"
         )
+
         parser.set_defaults(func=PreprocessGBIFCommand())
         parser.add_argument(
-            "input_path",
+            "input_file",
             type=str,
             help="Path to DarwinCore ZIP containing the occurence dataset",
         )
         parser.add_argument(
-            "output_path",
+            "output_file",
             type=str,
-            help="Output filename to summarized GBIF occurence data",
+            help="Absolute path to summarized GBIF occurence data",
         )
 
     def __call__(self, **kwargs) -> None:
@@ -113,39 +118,40 @@ class PreprocessGBIFCommand:
 
 
 class PreprocessZoneIDCommandOptions(BaseModel):
-    input_path: str
-    output_path: str
+    input_file: str
+    output_file: str
 
 
-class PreprocessZoneIDCommand:
+class PreprocessZoneIDCommand(BaseCommand):
     def __init__(self) -> None:
-        self.logger = init_logger("PreprocessZoneIDCommand")
+        super(PreprocessZoneIDCommand, self).__init__()
 
     @staticmethod
     def add_parser(subparser: _SubParsersAction):
         parser: ArgumentParser = subparser.add_parser(
             "zone-id", help="Adds zone id to existing zone polygon grid Shapefile"
         )
+
         parser.set_defaults(func=PreprocessZoneIDCommand())
         parser.add_argument(
-            "input_path",
+            "input_file",
             type=str,
             help="Path to Shapefile containing the grid or zone to calculate the zonal statistics from",
         )
-        parser.add_argument("output_path", type=str, help="Output Shapefile path")
+        parser.add_argument("output_file", type=str, help="Output Shapefile path")
 
     def __call__(self, args) -> None:
         # parse args
         self.config = PreprocessZoneIDCommandOptions(**vars(args))
 
         # read shapefile
-        df_geom = gpd.read_file(self.config.input_path)
+        df_geom = gpd.read_file(self.config.input_file)
 
         # add sequential ZONE_ID attribute
         df_geom["ZONE_ID"] = range(1, len(df_geom) + 1)
 
         # save to shapefile
-        df_geom.to_file(self.config.output_path, driver="ESRI Shapefile")
+        df_geom.to_file(self.config.output_file, driver="ESRI Shapefile")
 
 
 # ----------------------------------------------------------------------------
@@ -154,10 +160,10 @@ class PreprocessZoneIDCommand:
 
 
 class PreprocessZonalStatsCommandOptions(BaseModel):
+    occurence_file: str
     raster_path: str
     zone_path: str
-    occurence_path: str
-    output_path: str
+    output_file: str
     downsample: DownsampleEnum = DownsampleEnum.NONE
     test_size: float = 0.2
 
@@ -166,9 +172,9 @@ class PreprocessZonalStatsCommandOptions(BaseModel):
     jobs: int = 1
 
 
-class PreprocessZonalStatsCommand:
+class PreprocessZonalStatsCommand(BaseCommand):
     def __init__(self) -> None:
-        self.logger = init_logger("PreprocessCopernicusCommand")
+        super(PreprocessZonalStatsCommand, self).__init__()
 
     @staticmethod
     def add_parser(subparser: _SubParsersAction):
@@ -176,9 +182,10 @@ class PreprocessZonalStatsCommand:
             "zonal-stats",
             help="Preprocess GBIF occurence data and Copernicus Marine raster data to zonal statistics",
         )
+
         parser.set_defaults(func=PreprocessZonalStatsCommand())
         parser.add_argument(
-            "occurence_path", type=str, help="Path to simple GBIF occurence data"
+            "occurence_file", type=str, help="Path to simple GBIF occurence data"
         )
         parser.add_argument(
             "zone_path",
@@ -189,7 +196,7 @@ class PreprocessZonalStatsCommand:
             "raster_path", type=str, help="Path to a directory containing netCDF files"
         )
         parser.add_argument(
-            "output_path",
+            "output_file",
             type=str,
             help="Output path to save the zonal statistics dataset",
         )
@@ -221,7 +228,7 @@ class PreprocessZonalStatsCommand:
         jobs = [
             ZonalProcessorOptions(
                 raster_file=f,
-                occurence_file=self.config.occurence_path,
+                occurrence_file=self.config.occurence_file,
                 zone_file=self.config.zone_path,
                 output_path=self.config.temp_dir,
                 downsample=self.config.downsample,
@@ -268,7 +275,7 @@ class PreprocessZonalStatsCommand:
         df_final = df_final[cols]
 
         # save merged dataset
-        df_final.to_parquet(self.config.output_path, engine="pyarrow")
+        df_final.to_parquet(self.config.output_file, engine="pyarrow")
 
 
 # ----------------------------------------------------------------------------
@@ -285,13 +292,14 @@ class PreprocessMergeDatasetOptions(BaseModel):
 
 class PreprocessMergeDatasetCommand:
     def __init__(self) -> None:
-        self.logger = init_logger("PreprocessMergeDatasetCommand")
+        super(PreprocessMergeDatasetCommand, self).__init__()
 
     @staticmethod
     def add_parser(subparser: _SubParsersAction):
         parser: ArgumentParser = subparser.add_parser(
             "merge", help="Samples and split dataset into train and test sets"
         )
+
         parser.set_defaults(func=PreprocessMergeDatasetCommand())
         parser.add_argument(
             "dataset_path",
@@ -399,14 +407,15 @@ class PreprocessFeatureSelectionCommandOptions(BaseModel):
 
 class PreprocessFeatureSelectionCommand:
     def __init__(self) -> None:
-        self.logger = init_logger("PreprocessFeatureSelectionCommand")
+        super(PreprocessFeatureSelectionCommand, self).__init__()
 
     @staticmethod
     def add_parser(subparser: _SubParsersAction):
         parser: ArgumentParser = subparser.add_parser(
-            "feature_selection",
+            "feature-selection",
             help="Performs feature selection using information gain as the metric",
         )
+
         parser.set_defaults(func=PreprocessFeatureSelectionCommand())
         parser.add_argument(
             "dataset_file",

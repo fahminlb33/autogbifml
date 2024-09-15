@@ -1,3 +1,4 @@
+from commands.download import DownloadCmemsCommand
 from commands.preprocess import (
     PreprocessGBIFCommand,
     PreprocessZoneIDCommand,
@@ -5,5 +6,6 @@ from commands.preprocess import (
     PreprocessMergeDatasetCommand,
     PreprocessFeatureSelectionCommand,
 )
-from commands.train import TuneCommand, TrainCommand
+from commands.tune import TuneCommand
+from commands.train import TrainCommand
 from commands.predict import PredictCommand

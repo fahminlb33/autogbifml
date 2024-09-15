@@ -2,10 +2,6 @@ import os
 from enum import Enum
 from typing import Any
 
-from sklearnex import patch_sklearn
-
-patch_sklearn()
-
 import mlflow
 import optuna
 import joblib
@@ -13,15 +9,12 @@ from pydantic import BaseModel
 
 import numpy as np
 import pandas as pd
-import matplotlib
-import matplotlib.figure
 import matplotlib.pyplot as plt
 
 from xgboost import XGBClassifier
 from catboost import CatBoostClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
-
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import KFold
@@ -35,13 +28,6 @@ from sklearn.metrics import (
     RocCurveDisplay,
     PrecisionRecallDisplay,
 )
-
-from infrastructure.logger import init_logger
-
-
-def init_matplotlib():
-    # change matplotlib backend
-    matplotlib.use("Agg")
 
 
 class AlgorithmEnum(Enum):
@@ -57,9 +43,10 @@ class DataLoader:
         df = pd.read_parquet(path)
 
         # create X and y
-        return df.drop(
-            columns=["zone_id", "ts", "target", "country"], errors="ignore"
-        ), df["target"]
+        X = df.drop(columns=["zone_id", "ts", "target", "country"], errors="ignore")
+        y = df["target"]
+
+        return X, y
 
     def fit_transform(self, X: pd.DataFrame) -> pd.DataFrame:
         # create preprocessor
@@ -184,7 +171,6 @@ class OptunaObjectiveOptions(BaseModel):
 class OptunaObjective:
     def __init__(self, config: OptunaObjectiveOptions) -> None:
         self.config = config
-        self.logger = init_logger("OptunaObjective")
         self.loader = DataLoader()
 
     def __call__(self, trial: optuna.Trial) -> Any:
@@ -211,7 +197,7 @@ class OptunaObjective:
                 random_state=self.config.random_seed,
             )
             for fold_i, (train_idx, test_idx) in enumerate(cv.split(self.X, self.y)):
-                self.logger.info("Training fold %d", fold_i + 1)
+                print(">>> Training fold %d", fold_i + 1)
 
                 # split data
                 X_train, X_test = self.X.iloc[train_idx], self.X.iloc[test_idx]

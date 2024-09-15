@@ -1,7 +1,12 @@
 import argparse
 
-from pydantic import ValidationError
+import matplotlib
+from sklearnex import patch_sklearn
+
+patch_sklearn()
+
 from commands import (
+    DownloadCmemsCommand,
     PreprocessGBIFCommand,
     PreprocessZoneIDCommand,
     PreprocessZonalStatsCommand,
@@ -30,6 +35,9 @@ def main():
     # add sub commands
     subparsers = parser.add_subparsers()
 
+    # --- download command
+    DownloadCmemsCommand.add_parser(subparsers)
+
     # --- preprocessing commands
     parser_preprocess = subparsers.add_parser(
         "preprocess", help="Preprocess GBIF and Copernicus Marine data"
@@ -53,8 +61,17 @@ def main():
 
     # parse CLI
     args = parser.parse_args()
+    if "func" not in args:
+        print("Use --help to show available commands")
+        return
+
+    # execute tool
     args.func(args)
 
 
 if __name__ == "__main__":
+    # change matplotlib backend
+    matplotlib.use("Agg")
+
+    # bootstrap
     main()
