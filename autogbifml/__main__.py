@@ -1,6 +1,7 @@
 import argparse
 
 import matplotlib
+from pydantic import ValidationError
 from sklearnex import patch_sklearn
 
 patch_sklearn()
@@ -73,5 +74,9 @@ if __name__ == "__main__":
     # change matplotlib backend
     matplotlib.use("Agg")
 
-    # bootstrap
-    main()
+    try:
+        # bootstrap
+        main()
+    except ValidationError as e:
+        print(e)
+        exit(-1)
