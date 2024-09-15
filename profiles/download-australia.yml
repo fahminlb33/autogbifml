@@ -6,7 +6,7 @@ minimumDepth: 1
 maximumDepth: 1
 startDateTime: 2021-09-01
 endDateTime: 2023-11-30
-outputPath: ./dataset/copernicus_marine/australia
+outputPath: ../dataset/australia/cmems
 dataset:
   # Ocean Physics
   - id: cmems_mod_glo_phy_anfc_0.083deg_P1D-m
