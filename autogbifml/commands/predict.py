@@ -1,26 +1,13 @@
-import os
-import glob
-from typing import Any, Optional
+from typing import Any
 from argparse import ArgumentParser, _SubParsersAction
-
-import yaml
-import optuna
-import mlflow
 
 import pandas as pd
 import geopandas as gpd
 
 from pydantic import BaseModel
 
-from infrastructure.logger import init_logger
-from ml.training import (
-    init_matplotlib,
-    AlgorithmEnum,
-    OptunaObjective,
-    OptunaObjectiveOptions,
-    DataLoader,
-    Trainer,
-)
+from services.base import BaseCommand
+from services.model import AlgorithmEnum, DataLoader, Trainer
 
 # ----------------------------------------------------------------------------
 #  PERFORMS INFERENCE USING A PRETRAINED MODEL
@@ -28,8 +15,8 @@ from ml.training import (
 
 
 class PredictCommandOptions(BaseModel):
-    saved_model_file: str
-    saved_loader_file: str
+    classifier_file: str
+    loader_file: str
     polygon_file: str
     dataset_file: str
     output_file: str
@@ -38,20 +25,15 @@ class PredictCommandOptions(BaseModel):
     jobs: int = 1
 
 
-class PredictCommand:
+class PredictCommand(BaseCommand):
     def __init__(self) -> None:
-        self.logger = init_logger("PredictCommand")
-        init_matplotlib()
+        super(PredictCommand, self).__init__()
 
     @staticmethod
     def add_parser(subparser: _SubParsersAction):
-        parser: ArgumentParser = subparser.add_parser(
-            "predict", help="Run predictions on a single model"
-        )
+        parser: ArgumentParser = subparser.add_parser("predict", help="Run predictions")
+
         parser.set_defaults(func=PredictCommand())
-        parser.add_argument(
-            "output_file", type=str, help="Path to store the predicted shapefile"
-        )
         parser.add_argument(
             "--algorithm",
             type=str,
@@ -60,16 +42,16 @@ class PredictCommand:
             help="Algorithm used to train the model",
         )
         parser.add_argument(
-            "--saved-model-file",
-            type=str,
-            required=True,
-            help="Path to saved model file",
-        )
-        parser.add_argument(
-            "--saved-loader-file",
+            "--loader-file",
             type=str,
             required=True,
             help="Path to saved loader file",
+        )
+        parser.add_argument(
+            "--classifier-file",
+            type=str,
+            required=True,
+            help="Path to saved model file",
         )
         parser.add_argument(
             "--polygon-file", type=str, required=True, help="Path to zone polygon file"
@@ -80,6 +62,12 @@ class PredictCommand:
             required=True,
             help="Path to a dataset file to predict",
         )
+        parser.add_argument(
+            "--output-file",
+            type=str,
+            required=True,
+            help="Path to store the predicted GeoJSON",
+        )
 
     def __call__(self, args) -> Any:
         # parse args
@@ -88,57 +76,46 @@ class PredictCommand:
         # create data loader
         self.logger.info("Loading preprocessor...")
         loader = DataLoader()
-        loader.load(self.config.saved_loader_file)
+        loader.load(self.config.loader_file)
 
         # create model
         self.logger.info("Loading prediction model...")
         model = Trainer(self.config.algorithm, model_params={})
-        model.load(self.config.saved_model_file)
+        model.load(self.config.classifier_file)
 
         # load dataset
         self.logger.info("Loading dataset...")
-        df = pd.read_parquet(self.config.dataset_file)
+        df_zonal = pd.read_parquet(self.config.dataset_file)
+        print(df_zonal.info())
+
+        # check if dataset has zone_id
+        if "zone_id" not in df_zonal.columns:
+            raise ValueError("zone_id column not found in zonal dataset")
 
         # load polygon dataset
         self.logger.info("Loading polygon...")
         df_geom: gpd.GeoDataFrame = gpd.read_file(self.config.polygon_file)
 
-        # check if polygon has zone_id
+        # check if polygon has ZONE_ID
         if "ZONE_ID" not in df_geom.columns:
             raise ValueError("zone_id column not found in polygon dataset")
 
-        # get unique time steps
-        ts = df["ts"].unique().tolist()
-        self.logger.info("Found %d unique time step", len(ts))
-
-        # predict per time step
-        pred_series = []
-
+        # run prediction
         self.logger.info("Starting prediction...")
-        for time in ts:
-            # get data for time step
-            df_step = df[df["ts"] == time].copy().set_index("zone_id")
 
-            # derive features
-            X = loader.derive(df_step)
-            X = X.drop(columns=["zone_id", "ts", "target"], errors="ignore")
-            X = loader.transform(df_step)
+        # derive features
+        X = df_zonal.drop(columns=["zone_id", "ts", "target"], errors="ignore")
+        X = loader.transform(df_zonal)
 
-            # run predictions
-            y_pred = model.predict(X)
-
-            # create series
-            pred_series.append(
-                pd.Series(y_pred, name=time.strftime("%Y-%m-%d"), index=df_step.index)
-            )
+        # run predictions
+        df_zonal_pred = df_zonal.copy()
+        df_zonal_pred["predicted"] = model.predict(X)
 
         # construct prediction dataframe
-        df_pred = pd.concat(pred_series, axis=1)
-        df_geom_pred = df_geom[["ZONE_ID", "geometry"]].copy()
-        df_geom_pred = df_geom_pred.merge(
-            df_pred, left_on="ZONE_ID", right_index=True, how="left"
-        ).fillna(0)
+        df_geom_pred = df_geom[["ZONE_ID", "geometry"]]
+        df_geom_pred = df_geom_pred.merge(df_zonal_pred, left_on="ZONE_ID", right_index=True, how="left").fillna(0).drop(columns=["ZONE_ID"])
+        print(df_geom_pred.info())
 
         # save to shapefile
         self.logger.info("Saving polygon...")
-        df_geom_pred.to_file(self.config.output_file, driver="ESRI Shapefile")
+        df_geom_pred.to_file(self.config.output_file, driver="GeoJSON")
