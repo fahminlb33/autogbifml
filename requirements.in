@@ -1,10 +1,14 @@
 # data and numbers
 pandas
 geopandas
-numpy
+numpy<2.0.0
 xarray
 xarray-spatial
 pyarrow
+dask[dataframe]
+
+# data source
+copernicusmarine
 
 # visualization
 datashader
