@@ -4,65 +4,157 @@ Welcome to AutoGBIFML project!
 
 AutoGBIFML is a tool to create machine learning classification model to classify GBIF occurence data (DarwinCore format) with Copernicus Marine Data as the input data. This tool is part of my graduate thesis and currently still in work in progress phase.
 
-Use the file tree on the left side to navigate this documentation.
+See more about [dataset](./data.md) and the [delineation process](./whale_zone_delineation.md) used in this research.
 
-https://github.com/pditommaso/awesome-pipeline
+## Installing AutoGBIFML
 
-joblib - parallel engine
-parsl - parallel workflow engine with graph execution
+AutoGBIFML encourage the use of virtual environment. I personally use `uv` to create the venv.
 
-
-processing.run("native:zonalstatisticsfb", {'INPUT':'D:/gis/KAB. BOGOR/ADMINISTRASIDESA_AR_25K.shp','INPUT_RASTER':'D:/gis/temperature.tif','RASTER_BAND':1,'COLUMN_PREFIX':'_','STATISTICS':[0,1,2],'OUTPUT':'TEMPORARY_OUTPUT'})
-
-qgis_process run native:zonalstatisticsfb --distance_units=meters --area_units=m2 --ellipsoid=EPSG:7030 --INPUT='D:/gis/KAB. BOGOR/ADMINISTRASIDESA_AR_25K.shp' --INPUT_RASTER='D:/gis/temperature.tif' --RASTER_BAND=1 --COLUMN_PREFIX=_ --STATISTICS=0 --STATISTICS=1 --STATISTICS=2 --OUTPUT=TEMPORARY_OUTPUT
-
-processing.run("grass7:r.stats.zonal", {'base':'D:/gis/temperature.tif','cover':'D:/gis/temperature.tif','method':0,'-c':False,'-r':False,'output':'TEMPORARY_OUTPUT','GRASS_REGION_PARAMETER':None,'GRASS_REGION_CELLSIZE_PARAMETER':0,'GRASS_RASTER_FORMAT_OPT':'','GRASS_RASTER_FORMAT_META':''})
+```bash
+git clone https://github.com/fahminlb33/autogbifml.git
+cd autogbifml
+pip install -r requirements.txt
+```
 
 ## Commands
 
-autogbifml
+- `download` download data from Copernicus Marine Environmental Monitoring Service (CMEMS)
+- `preprocess` input darwin, netcdf, and zone polygon, outputs well prepared parquet for training
+- `tune` perform cross validation
+- `train` train model
+- `evaluate` evaluate a model
+- `predict` input two raster and zone polygon? predict on single time or series
 
-gbifmeta - input Darwin, return bounding box, time extent, spatial extent, dll
+### `download`
 
-download - downloads data from copernicus
+Download dataset from Copernicus Marine Environmental Monitoring Service (CMEMS) using a download profile specification. The sample specs is available in the `profiles` directory.
 
-prepare - input darwin, netcdf, and zone polygon, outputs well prepared parquet for training
+Example command:
 
-eval - perform cross validation
+```sh
+python autogbifml download profiles/download-africa.yml
+python autogbifml download profiles/download-australia.yml
+```
 
-train - train model
+### `preprocess`
 
-predct - input two raster and zone polygon? predict on single time or series
+#### `preprocess occurence`
 
-## Dataset
+Converts GBIF DarwinCore format into a simplified CSV occurrence data for training and testing the model.
 
-World administrative boundaries https://public.opendatasoft.com/explore/dataset/world-administrative-boundaries/export/
+Example command:
 
-## Membuat poligon zona
+```sh
+python autogbifml preprocess occurrence ./dataset/gbif/0013575-240202131308920.zip ./dataset/gbif/occurrence.csv
+```
 
-1. Konversi format DarwinCore ke lat lon CSV
-2. Project baru QGIS dengan CRS EPSG:4326 (WG 84)
-3. Import kenampakan lat lon ke QGIS
-4. Import XYZ Layer > OpenStreetMap
-5. Import world administrative boundaries Shapefile. output=world_adm
-6. Membuat bounding box dari koordinat kenampakan. Processing > Layer tools > Extract layer extent. output=bbox
-7. Buffer bbox. Processing > Vector geometry > Buffer. input=bbox output=bbox_buffer distance=2 deg endcap=square join=mitter mitterlimit=2
-8. Membuat zona darat yang akan dihapus. Processing > Vector overlay > Intersect. input=bbox_buffer overlay=world_adm output=bbox_remove_int
-9. Membuat zona laut. Processing > Vector overlay > Difference. input=bbox_buffer overlay=bbox_intersect output=bbox_poly
-10. Membuat grid. Processing > Vector creation > Create grid. type=rect/hex extent=bbox_poly horizontalSpacing=0,3 verticalSpacing=0,3 output=grid
-11. Membuat memotong grid sesuai bounding box. Processing > Vector overlay > Intersect. input=grid overlay=bbox_poly output=grid_poly
-12. Membuat poligon untuk memotong tengah laut. New Shapefile and then draw manually, output=bbox_remove_center
-13. Memotong poligon grid dengan tengah laut. Processing > Vector overlay > Difference. input=grid_poly overlay=bbox_remove_center output=grid_poly_segments
+#### `preprocess zone-id`
 
-grid_poly_segments adalah poligon zona untuk membuat data training dan testing dengan zonal statistics dan raster
+Adds a unique ID to each polygon in the whale sighting zones. The input must be a Shapefile and contains one or more polygons.
 
---------
+Example command:
 
-1. Layer Tools > Extract Layer Extent
-2. Vector geometry > Bufffer [distance=1 deg, join style=mitter]
-3. Vector overlay > Intersection [world and bb -> land area]
-4. Research tool > Create grid [v/h spacing=0,83]
-5. Vector overlay > Symmetrical difference [input=land, overlay=grid -> sea grid]
-6. Vector analysis > Count points in polygon
+```sh
+python autogbifml preprocess zone-id ./dataset/shp/africa/grid-sea-africa.shp ./dataset/shp/africa/grid-sea-africa-zoned.shp
+python autogbifml preprocess zone-id ./dataset/shp/australia/grid-sea-australia.shp ./dataset/shp/australia/grid-sea-australia-zoned.shp
+```
 
-https://carpentries-incubator.github.io/geospatial-python/10-zonal-statistics.html
+#### `preprocess zonal-stats`
+
+Calculates the zonal statistics using the zoned whale sighting zone polygons and CMEMS raster data.
+
+Example command:
+
+```sh
+python autogbifml --jobs 4 preprocess zonal-stats \
+    ./dataset/gbif/occurrence.csv \
+    ./dataset/shp/africa/grid-sea-africa-zoned.shp \
+    ./dataset/africa/cmems \
+    ./dataset/zonal/africa.parquet
+
+python autogbifml --jobs 4 preprocess zonal-stats \
+    ./dataset/gbif/occurrence.csv \
+    ./dataset/shp/australia/grid-sea-australia-zoned.shp \
+    ./dataset/australia/cmems \
+    ./dataset/zonal/australia.parquet
+```
+
+#### `preprocess merge`
+
+Merge different spatial location dataset from previous zonal statistics dataset. For example, it is used to combine the Africa and Australia dataset.
+
+Example command:
+
+```sh
+python autogbifml preprocess merge ./dataset/zonal ./dataset/merged --test-size 0.2
+```
+
+#### `preprocess feature-selection`
+
+Performs feature selection using information gain as the metric.
+
+Example command:
+
+```sh
+python autogbifml preprocess feature-selection \
+    ./dataset/merged/train.parquet \
+    ./dataset/merged/train-sel-10.parquet \
+    --strategy=topk \
+    --topk=10
+
+python autogbifml preprocess feature-selection \
+    ./dataset/merged/test.parquet \
+    ./dataset/merged/test-sel-10.parquet \
+    --strategy=manual \
+    --features=sob_mean,sob_sum,fe_mean,fe_sum,so_sum,po4_mean,pbo_mean,pbo_sum,tob_mean,tob_sum
+```
+
+## `tune`
+
+Performs hyperparameter tuning using the training dataset.
+
+Example command:
+
+```sh
+python autogbifml --jobs 12 tune \
+    ./dataset/merged/train-sel-10.parquet \
+    ./dataset/models/catboost_tune \
+    --name thesis_catboost_tune_v3 \
+    --algorithm catboost \
+    --shuffle \
+    --tracking-url http://10.20.20.102:8009 \
+    --storage mysql://optuna:optuna123@10.20.20.102:3306/optuna
+```
+
+For a complete commands used in the reference paper, check the `scripts/tune.sh` script.
+
+## `train`
+
+Trains a model and evaluate it using train and test data. This will output the data loader, model, and feature importance CSV.
+The input dataset MUST have two files with the name "train" and "test" with parquet extension.
+
+Example command:
+
+```sh
+python autogbifml train \
+    ./dataset/merged \
+    ./dataset/models/rf \
+    --algorithm random_forest \
+    --params-file ./dataset/models/best_params_random_forest.yml
+```
+
+## `predict`
+
+Performs an inference on input test data and outputs the predictions in GeoJSON format.
+
+Example command:
+
+```sh
+python autogbifml predict \
+    --algorithm random_forest \
+    --loader-file ./dataset/models10/loader.joblib \
+    --classifier-file ./dataset/models10/random_forest_model.joblib \
+    --polygon-file ./dataset/africa/shp/grid-sea-africa-zoned.shp \
+    --dataset-file ./dataset/sample-predict.parquet \
+    --output-file ./predictions.json
+```
