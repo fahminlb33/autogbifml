@@ -240,7 +240,7 @@ const AlpineApp = {
       zone_id: this.props.zone_id,
       target: PREDICTION_CLASS[this.props.target],
       predicted: PREDICTION_CLASS[this.props.predicted],
-      proba: (this.props.proba * 100).toFixed(4) + "%",
+      proba: (this.props.proba * 100).toFixed(4),
       proba_log: this.props.proba_log.toFixed(4),
 
       sob_mean: this.props.sob_mean.toFixed(4),

@@ -100,19 +100,13 @@
             <!-- Color-coded Probability -->
             <p>
               <strong>Probabilitas:</strong>
-              <span
-                x-text="`${selectedProps.proba}%`"
-                :style="{
-                color: getProbabilityColor(selectedProps.proba)
-              }"
-              >
-              </span>
+              <span x-text="selectedProps.proba"></span>%
             </p>
 
             <!-- Log Probability -->
             <p>
               <strong>Log Probabilitas:</strong>
-              <span x-text="selectedProps.proba_log"></span>
+              <span x-text="selectedProps.proba_log"></span>%
             </p>
 
             <!-- Divider -->
