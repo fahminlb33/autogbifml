@@ -53,12 +53,12 @@ class PreprocessGBIFCommand(BaseCommand):
             help="Absolute path to summarized GBIF occurence data",
         )
 
-    def __call__(self, **kwargs) -> None:
+    def __call__(self, args) -> None:
         # parse args
-        self.config = PreprocessGBIFCommandOptions(**kwargs)
+        self.config = PreprocessGBIFCommandOptions(**vars(args))
 
         # read DarwinCore zip file
-        with ZipFile(self.config.file_path, "r") as zip_ref:
+        with ZipFile(self.config.input_file, "r") as zip_ref:
             # read citations file
             with zip_ref.open("citations.txt") as citations_file:
                 citations = citations_file.read().decode("utf-8")
@@ -92,8 +92,8 @@ class PreprocessGBIFCommand(BaseCommand):
                 df_subset = df_subset.sort_values("ts", ascending=False)
 
                 # save to csv
-                df_subset.to_csv(self.config.output_filename, index=False)
-                self.logger.info(f"File saved to {self.config.output_filename}")
+                df_subset.to_csv(self.config.output_file, index=False)
+                self.logger.info(f"File saved to {self.config.output_file}")
 
     @staticmethod
     def coalesce_coordinate(col: str) -> float:
