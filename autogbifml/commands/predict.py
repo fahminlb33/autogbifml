@@ -113,7 +113,13 @@ class PredictCommand(BaseCommand):
 
         # construct prediction dataframe
         df_geom_pred = df_geom[["ZONE_ID", "geometry"]]
-        df_geom_pred = df_geom_pred.merge(df_zonal_pred, left_on="ZONE_ID", right_index=True, how="left").fillna(0).drop(columns=["ZONE_ID"])
+        df_geom_pred = (
+            df_geom_pred.merge(
+                df_zonal_pred, left_on="ZONE_ID", right_index=True, how="left"
+            )
+            .fillna(0)
+            .drop(columns=["ZONE_ID"])
+        )
         print(df_geom_pred.info())
 
         # save to shapefile

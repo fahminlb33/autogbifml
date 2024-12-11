@@ -23,14 +23,23 @@ def main():
     # create root parser
     parser = argparse.ArgumentParser(prog="autogbifml")
     parser.add_argument(
-        "-j", "--jobs", default=1, help="Number of jobs to run in parallel", type=int
+        "-j",
+        "--jobs",
+        type=int,
+        default=1,
+        help="Number of jobs to run in parallel",
     )
     parser.add_argument(
-        "-s",
         "--random-seed",
+        type=int,
         default=21,
         help="Random seed for reproducibility",
-        type=int,
+    )
+    parser.add_argument(
+        "--temp-dir",
+        type=str,
+        default="./tmp",
+        help="Path to temporary directory to store intermediate files",
     )
 
     # add sub commands

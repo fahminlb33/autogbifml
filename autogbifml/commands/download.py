@@ -1,11 +1,29 @@
 from typing import Any
 from argparse import ArgumentParser, _SubParsersAction
 
-import yaml
-import copernicusmarine
+from yaml import safe_load
 from pydantic import BaseModel
+from copernicusmarine import subset
 
 from services.base import BaseCommand
+
+
+class DownloadDataset(BaseModel):
+    id: str
+    variables: list[str]
+
+
+class DownloadProfile(BaseModel):
+    minimumLongitude: float
+    maximumLongitude: float
+    minimumLatitude: float
+    maximumLatitude: float
+    minimumDepth: float
+    maximumDepth: float
+    startDateTime: str
+    endDateTime: str
+    outputPath: str
+    dataset: list[DownloadDataset]
 
 
 class DownloadCmemsCommandOptions(BaseModel):
@@ -23,7 +41,7 @@ class DownloadCmemsCommand(BaseCommand):
         )
 
         parser.set_defaults(func=DownloadCmemsCommand())
-        parser.add_argument("profile_file", type=str, help="Path to download profile")
+        parser.add_argument("profile-file", type=str, help="Path to download profile")
 
     def __call__(self, args) -> Any:
         # parse args
@@ -31,12 +49,12 @@ class DownloadCmemsCommand(BaseCommand):
 
         # load profile
         self.logger.info("Loading download profile...")
-        profile = yaml.load(open(args.profile_file, "r"))
+        profile = DownloadProfile(**safe_load(open(self.config.profile_file, "r")))
 
         # process all profiles
-        for dataset in profile["dataset"]:
+        for dataset in profile.dataset:
             self.logger.info(f"Download start: {dataset.id}")
-            copernicusmarine.subset(
+            subset(
                 dataset_id=dataset.id,
                 variables=dataset.variables,
                 start_datetime=f"{profile.startDateTime}T00:00:00",
@@ -47,4 +65,6 @@ class DownloadCmemsCommand(BaseCommand):
                 maximum_latitude=profile.maximumLatitude,
                 minimum_depth=profile.minimumDepth,
                 maximum_depth=profile.maximumDepth,
+                output_directory=profile.outputPath,
+                force_download=True,
             )
