@@ -1,0 +1,139 @@
+output_file: /home/fahmi/research/thesis-tree/dataset/zonal/australia.parquet
+occurrence_file: /home/fahmi/research/thesis-tree/dataset/gbif/occurences.csv
+zones_file: /home/fahmi/research/thesis-tree/dataset/australia/shp/grid-sea-australia-zoned.shp
+
+vectors:
+  - type: grid-distance
+    path: /home/fahmi/research/thesis-tree/dataset/australia/shp/australia-grid-distance.shp
+    zone_id: ZONE_ID
+    select:
+      - distance
+
+rasters:
+  - type: gebco
+    path: /home/fahmi/research/thesis-tree/dataset/australia/gebco/australia-bathy.nc
+    select:
+      - elevation
+    derive:
+      - sum
+      - mean
+      - count
+
+  - type: gebco
+    path: /home/fahmi/research/thesis-tree/dataset/australia/gebco/australia-aspect.nc
+    select:
+      - Band1
+    derive:
+      - sum
+      - mean
+      - count
+
+  - type: gebco
+    path: /home/fahmi/research/thesis-tree/dataset/australia/gebco/australia-slope.nc
+    select:
+      - Band1
+    derive:
+      - sum
+      - mean
+      - count
+
+  - type: cmems
+    path: /home/fahmi/research/thesis-tree/dataset/australia/cmems/cmems_mod_glo_bgc-bio_anfc_0.25deg_P1D-m_nppv-o2_112.00E-143.00E_39.00S-13.00N_0.49m_2021-11-01-2023-11-30.nc
+    select:
+      - nppv
+      - o2
+    derive:
+      - sum
+      - mean
+      - count
+
+  - type: cmems
+    path: /home/fahmi/research/thesis-tree/dataset/australia/cmems/cmems_mod_glo_bgc-car_anfc_0.25deg_P1D-m_talk-dissic-ph_112.00E-143.00E_39.00S-13.00N_0.49m_2021-11-01-2023-11-30.nc
+    select:
+      - talk
+      - dissic
+      - ph
+    derive:
+      - sum
+      - mean
+      - count
+
+  - type: cmems
+    path: /home/fahmi/research/thesis-tree/dataset/australia/cmems/cmems_mod_glo_bgc-co2_anfc_0.25deg_P1D-m_spco2_112.00E-143.00E_39.00S-13.00N_2021-11-01-2023-11-30.nc
+    select:
+      - spco2
+    derive:
+      - sum
+      - mean
+      - count
+
+  - type: cmems
+    path: /home/fahmi/research/thesis-tree/dataset/australia/cmems/cmems_mod_glo_bgc-nut_anfc_0.25deg_P1D-m_no3-po4-si-fe_112.00E-143.00E_39.00S-13.00N_0.49m_2021-11-01-2023-11-30.nc
+    select:
+      - no3
+      - po4
+      - si
+      - fe
+    derive:
+      - sum
+      - mean
+      - count
+
+  - type: cmems
+    path: /home/fahmi/research/thesis-tree/dataset/australia/cmems/cmems_mod_glo_bgc-pft_anfc_0.25deg_P1D-m_chl-phyc_112.00E-143.00E_39.00S-13.00N_0.49m_2021-11-01-2023-11-30.nc
+    select:
+      - chl
+      - phyc
+    derive:
+      - sum
+      - mean
+      - count
+
+  - type: cmems
+    path: /home/fahmi/research/thesis-tree/dataset/australia/cmems/cmems_mod_glo_phy_anfc_0.083deg_P1D-m_zos-pbo-tob-sob_112.00E-143.00E_39.00S-13.00N_2021-09-01-2023-11-30.nc
+    select:
+      - zos
+      - pbo
+      - tob
+      - sob
+    derive:
+      - sum
+      - mean
+      - count
+
+  - type: cmems
+    path: /home/fahmi/research/thesis-tree/dataset/australia/cmems/cmems_mod_glo_phy-cur_anfc_0.083deg_P1D-m_uo-vo_112.00E-143.00E_39.00S-13.00N_0.49m_2021-09-01-2023-11-30.nc
+    select:
+      - uo
+      - vo
+    derive:
+      - sum
+      - mean
+      - count
+
+  - type: cmems
+    path: /home/fahmi/research/thesis-tree/dataset/australia/cmems/cmems_mod_glo_phy-so_anfc_0.083deg_P1D-m_so_112.00E-143.00E_39.00S-13.00N_0.49m_2021-09-01-2023-11-30.nc
+    select:
+      - so
+    derive:
+      - sum
+      - mean
+      - count
+
+  - type: cmems
+    path: /home/fahmi/research/thesis-tree/dataset/australia/cmems/cmems_mod_glo_phy-thetao_anfc_0.083deg_P1D-m_thetao_112.00E-143.00E_39.00S-13.00N_0.49m_2021-09-01-2023-11-30.nc
+    select:
+      - thetao
+    derive:
+      - sum
+      - mean
+      - count
+
+  - type: cmems
+    path: /home/fahmi/research/thesis-tree/dataset/australia/cmems/cmems_mod_glo_phy-wcur_anfc_0.083deg_P1D-m_wo_112.00E-143.00E_39.00S-13.00N_0.49m_2021-09-01-2023-11-30.nc
+    select:
+      - wo
+    derive:
+      - sum
+      - mean
+      - count
