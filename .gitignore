@@ -161,6 +161,8 @@ cython_debug/
 
 # Dataset
 dataset/
+dataset_dosmud/
 
 # Temp dir
+tmp/
 temp/
