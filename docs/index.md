@@ -14,6 +14,17 @@ AutoGBIFML encourage the use of virtual environment. I personally use `uv` to cr
 git clone https://github.com/fahminlb33/autogbifml.git
 cd autogbifml
 pip install -r requirements.txt
+sudo apt install gdal-bin
+```
+
+Converting GeoTIFF to NetCDF
+
+```sh
+gdal_translate -of netCDF -co 'FORMAT=NC4' ./dataset/africa/gebco/africa-aspect.tif ./dataset/africa/gebco/africa-aspect.nc
+gdal_translate -of netCDF -co 'FORMAT=NC4' ./dataset/africa/gebco/africa-slope.tif ./dataset/africa/gebco/africa-slope.nc
+
+gdal_translate -of netCDF -co 'FORMAT=NC4' ./dataset/australia/gebco/australia-aspect.tif ./dataset/australia/gebco/australia-aspect.nc
+gdal_translate -of netCDF -co 'FORMAT=NC4' ./dataset/australia/gebco/australia-slope.tif ./dataset/australia/gebco/australia-slope.nc
 ```
 
 ## Commands
@@ -38,7 +49,7 @@ python autogbifml download profiles/download-australia.yml
 
 ### `preprocess`
 
-#### `preprocess occurence`
+#### `preprocess occurrence`
 
 Converts GBIF DarwinCore format into a simplified CSV occurrence data for training and testing the model.
 

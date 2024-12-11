@@ -1,25 +1,23 @@
 import os
 import re
 import glob
+import shutil
 from enum import Enum
-from typing import Optional
+from typing import Optional, Literal
 from zipfile import ZipFile
 from argparse import ArgumentParser, _SubParsersAction
 
 import pandas as pd
 import geopandas as gpd
 
+from yaml import safe_load
 from joblib import Parallel, delayed
 from pydantic import BaseModel
 from sklearn.model_selection import train_test_split
 from sklearn.feature_selection import SelectKBest, SelectPercentile, mutual_info_classif
 
 from services.base import BaseCommand
-from services.preprocessing import (
-    ZonalProcessor,
-    ZonalProcessorOptions,
-    DownsampleEnum,
-)
+from services.preprocessing import ZonalRasterProcessor
 
 # ----------------------------------------------------------------------------
 #  CONVERT DARWINCORE TO CSV
@@ -38,7 +36,7 @@ class PreprocessGBIFCommand(BaseCommand):
     @staticmethod
     def add_parser(subparser: _SubParsersAction):
         parser: ArgumentParser = subparser.add_parser(
-            "occurence", help="Preprocess GBIF data to simple occurence data"
+            "occurrence", help="Preprocess GBIF data to simple occurence data"
         )
 
         parser.set_defaults(func=PreprocessGBIFCommand())
@@ -159,13 +157,31 @@ class PreprocessZoneIDCommand(BaseCommand):
 # ----------------------------------------------------------------------------
 
 
-class PreprocessZonalStatsCommandOptions(BaseModel):
-    occurence_file: str
-    raster_path: str
-    zone_path: str
+class PreprocessZonalVectorItem(BaseModel):
+    type: Literal["grid-distance"]
+    path: str
+    zone_id: str
+    select: list[str]
+
+
+class PreprocessZonalRasterItem(BaseModel):
+    type: Literal["gebco", "cmems"]
+    path: str
+    select: list[str]
+    derive: list[Literal["sum", "mean", "count"]]
+
+
+class PreprocessZonalProfile(BaseModel):
     output_file: str
-    downsample: DownsampleEnum = DownsampleEnum.NONE
-    test_size: float = 0.2
+    occurrence_file: str
+    zones_file: str
+
+    vectors: list[PreprocessZonalVectorItem]
+    rasters: list[PreprocessZonalRasterItem]
+
+
+class PreprocessZonalStatsCommandOptions(BaseModel):
+    profile_file: str
 
     # job settings
     temp_dir: str = "./temp"
@@ -180,70 +196,72 @@ class PreprocessZonalStatsCommand(BaseCommand):
     def add_parser(subparser: _SubParsersAction):
         parser: ArgumentParser = subparser.add_parser(
             "zonal-stats",
-            help="Preprocess GBIF occurence data and Copernicus Marine raster data to zonal statistics",
+            help="Preprocess input data (vectors, rasters) for machine learning",
         )
 
         parser.set_defaults(func=PreprocessZonalStatsCommand())
         parser.add_argument(
-            "occurence_file", type=str, help="Path to simple GBIF occurence data"
-        )
-        parser.add_argument(
-            "zone_path",
-            type=str,
-            help="Path to zone polygon Shapefile (it must have ZONE_ID in the attribute table)",
-        )
-        parser.add_argument(
-            "raster_path", type=str, help="Path to a directory containing netCDF files"
-        )
-        parser.add_argument(
-            "output_file",
-            type=str,
-            help="Output path to save the zonal statistics dataset",
-        )
-
-        parser.add_argument(
-            "--downsample",
-            type=str,
-            choices=["none", "weekly", "monthly"],
-            default="none",
-            help="Time frequency to downsample to (default: none)",
-        )
-        parser.add_argument(
-            "--temp-dir",
-            type=str,
-            help="Path to temporary directory to store intermediate files",
+            "profile_file", type=str, help="Path to data preprocessing profile"
         )
 
     def __call__(self, args) -> None:
         self.config = PreprocessZonalStatsCommandOptions(**vars(args))
 
-        # create temp dir
-        os.makedirs(self.config.temp_dir, exist_ok=True)
-
-        # find all raster files
-        raster_files = glob.glob(f"{self.config.raster_path}/*.nc")
-        self.logger.info("Found %d raster files", len(raster_files))
-
-        # process each raster file
-        jobs = [
-            ZonalProcessorOptions(
-                raster_file=f,
-                occurrence_file=self.config.occurence_file,
-                zone_file=self.config.zone_path,
-                output_path=self.config.temp_dir,
-                downsample=self.config.downsample,
-            )
-            for f in raster_files
-        ]
-
-        Parallel(n_jobs=self.config.jobs, verbose=1)(
-            delayed(lambda x: ZonalProcessor(x)())(job) for job in jobs
+        # load profile
+        self.profile = PreprocessZonalProfile(
+            **safe_load(open(self.config.profile_file, "r"))
         )
-        self.logger.info("Finished processing zonal statistics")
+        self.logger.info("Loaded profile file!")
+
+        # create temp dir
+        temp_path = os.path.abspath(self.config.temp_dir)
+        shutil.rmtree(temp_path, ignore_errors=True)
+        os.makedirs(temp_path, exist_ok=True)
+
+        # run processing
+        self.process_rasters()
+        self.process_vectors()
 
         # merge all temp data to one dataframe
         self.merge()
         self.logger.info("Finished!")
+
+    def process_rasters(self):
+        # create job config
+        jobs = [
+            {
+                "type": f.type,
+                "derived_vars": f.derive,
+                "selected_vars": f.select,
+                "raster_file": f.path,
+                "occurrence_file": self.profile.occurrence_file,
+                "zone_file": self.profile.zones_file,
+                "output_path": self.config.temp_dir,
+            }
+            for f in self.profile.rasters
+        ]
+
+        # create parallel processor
+        processor_job_fun = delayed(lambda x: ZonalRasterProcessor(**x)())
+        processor_parallel = Parallel(n_jobs=self.config.jobs, verbose=1)
+
+        # start jobs
+        processor_parallel(processor_job_fun(job) for job in jobs)
+        self.logger.info("Finished processing zonal statistics")
+
+    def process_vectors(self):
+        for vector_item in self.profile.vectors:
+            # open vector
+            gdf = gpd.read_file(vector_item.path)
+
+            # subset and rename
+            gdf_subset: gpd.GeoDataFrame = gdf[
+                [vector_item.zone_id] + vector_item.select
+            ]
+            gdf_subset = gdf_subset.rename(columns={vector_item.zone_id: "zone_id"})
+
+            # save to parquet
+            gdf_subset.to_parquet(f"{self.config.temp_dir}/{vector_item.type}.parquet")
 
     def merge(self):
         self.logger.info("Merging all variables...")
@@ -252,30 +270,47 @@ class PreprocessZonalStatsCommand(BaseCommand):
         temp_files = glob.glob(f"{self.config.temp_dir}/*.parquet")
 
         # first parquet as reference
-        df_final = pd.read_parquet(temp_files[0])
+        df_final = pd.read_parquet(temp_files[0]).rename(
+            columns={"target": "preserve_target"}
+        )
         for f in temp_files[1:]:
             # read next dataset
             df_temp = pd.read_parquet(f)
 
             # merge on ZONE_ID
-            df_final = df_final.merge(df_temp, on=["zone_id", "ts"]).drop(
+            if "cmems" in f:
+                join_cols = ["zone_id", "ts"]
+            else:
+                join_cols = ["zone_id"]
+
+            # merge
+            df_final = df_final.merge(df_temp, on=join_cols).drop(
                 columns=["target_x"], errors="ignore"
             )
 
         # drop extra merge fields
-        df_final.drop(columns=[x for x in df_final.columns if x.startswith("target_")])
+        df_final = df_final.drop(
+            columns=[x for x in df_final.columns if x.startswith("target")]
+        )
+
+        # rename target col
+        df_final = df_final.rename(columns={"preserve_target": "target"})
+
+        # drop duplicates
+        df_final = df_final.drop_duplicates(
+            subset=["ts", "zone_id", "country", "target"]
+        )
 
         # rearange columns
-        cols = list(x for x in df_final.columns if not x.startswith("target_"))
-        cols.remove("ts")
-        cols.remove("target")
-        cols.insert(1, "ts")
-        cols.append("target")
-
-        df_final = df_final[cols]
+        cols = list(
+            x
+            for x in df_final.columns
+            if not x.startswith("target") and x not in ["country", "ts", "zone_id"]
+        )
+        cols = ["country", "ts", "zone_id", *cols, "target"]
 
         # save merged dataset
-        df_final.to_parquet(self.config.output_file, engine="pyarrow")
+        df_final[cols].to_parquet(self.profile.output_file)
 
 
 # ----------------------------------------------------------------------------
@@ -288,9 +323,10 @@ class PreprocessMergeDatasetOptions(BaseModel):
     output_path: str
 
     test_size: float = 0.2
+    random_seed: int = 42
 
 
-class PreprocessMergeDatasetCommand:
+class PreprocessMergeDatasetCommand(BaseCommand):
     def __init__(self) -> None:
         super(PreprocessMergeDatasetCommand, self).__init__()
 
@@ -325,21 +361,18 @@ class PreprocessMergeDatasetCommand:
         data_files = glob.glob(f"{self.config.dataset_path}/*.parquet")
 
         # first parquet as reference
-        min_samples = float("inf")
+        # min_samples = float("inf")
         all_dfs = []
         for f in data_files:
             # get country from filename
-            country = os.path.splitext(os.path.basename(f))[0]
+            country = (
+                os.path.splitext(os.path.basename(f))[0]
+                .replace("_1", "")
+                .replace("_2", "")
+            )
 
             # read next dataset
             df_temp = pd.read_parquet(f).assign(country=country)
-
-            # update
-            min_samples = min(
-                min_samples,
-                df_temp[df_temp["target"] == 0].shape[0],
-                df_temp[df_temp["target"] == 1].shape[0],
-            )
             all_dfs.append(df_temp)
 
             self.logger.info(
@@ -349,14 +382,15 @@ class PreprocessMergeDatasetCommand:
                 df_temp["target"].value_counts(),
             )
 
-        # undersample
-        sampled_dfs = []
-        for df in all_dfs:
-            sampled_dfs.append(df[df["target"] == 0].sample(min_samples))
-            sampled_dfs.append(df[df["target"] == 1].sample(min_samples))
-
         # concat all
-        df_final = pd.concat(sampled_dfs, ignore_index=True)
+        df_final = pd.concat(all_dfs, ignore_index=True)
+
+        # drop duplicates
+        df_final = df_final.drop_duplicates(
+            subset=["ts", "zone_id", "country", "target"]
+        )
+
+        # print stats
         self.logger.info("Columns: %s", df_final.columns.values)
         self.logger.info(
             "Statistics: %s", df_final[["country", "target"]].value_counts()
@@ -368,6 +402,7 @@ class PreprocessMergeDatasetCommand:
             df_final,
             test_size=self.config.test_size,
             stratify=df_final[["country", "target"]],
+            random_state=self.config.random_seed,
         )
 
         # split statistics
@@ -377,12 +412,8 @@ class PreprocessMergeDatasetCommand:
 
         # save dataset
         self.logger.info("Saving dataset...")
-        df_train.to_parquet(
-            os.path.join(self.config.output_path, "train.parquet"), engine="pyarrow"
-        )
-        df_test.to_parquet(
-            os.path.join(self.config.output_path, "test.parquet"), engine="pyarrow"
-        )
+        df_train.to_parquet(os.path.join(self.config.output_path, "train.parquet"))
+        df_test.to_parquet(os.path.join(self.config.output_path, "test.parquet"))
 
 
 # ----------------------------------------------------------------------------
@@ -405,7 +436,7 @@ class PreprocessFeatureSelectionCommandOptions(BaseModel):
     features: Optional[str] = ""
 
 
-class PreprocessFeatureSelectionCommand:
+class PreprocessFeatureSelectionCommand(BaseCommand):
     def __init__(self) -> None:
         super(PreprocessFeatureSelectionCommand, self).__init__()
 
@@ -489,4 +520,4 @@ class PreprocessFeatureSelectionCommand:
 
         # save dataset
         self.logger.info("Saving dataset...")
-        df[all_features].to_parquet(self.config.output_file, engine="pyarrow")
+        df[all_features].to_parquet(self.config.output_file)
