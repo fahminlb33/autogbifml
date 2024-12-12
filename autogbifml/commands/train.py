@@ -7,7 +7,7 @@ import yaml
 from pydantic import BaseModel
 
 from services.base import BaseCommand
-from services.model import AlgorithmEnum, DataLoader, Trainer
+from services.model import AlgorithmEnum, Trainer, read_dataset
 
 # ----------------------------------------------------------------------------
 #  TRAIN A MODEL
@@ -71,20 +71,10 @@ class TrainCommand(BaseCommand):
         self.logger.info(f"Found train dataset: {train_file}")
         self.logger.info(f"Found test dataset: {test_file}")
 
-        # create data loader
-        loader = DataLoader()
-
         # load dataset
         self.logger.info("Loading dataset...")
-        X_train, y_train = loader.read_parquet(train_file)
-        X_test, y_test = loader.read_parquet(test_file)
-
-        cols = list(X_train.columns)
-
-        # preprocess
-        self.logger.info("Preprocessing dataset...")
-        X_train = loader.fit_transform(X_train)
-        X_test = loader.transform(X_test)
+        X_train, y_train = read_dataset(train_file)
+        X_test, y_test = read_dataset(test_file)
 
         # create trainer
         model = Trainer(
@@ -103,13 +93,5 @@ class TrainCommand(BaseCommand):
         # create output dir
         os.makedirs(self.config.output_path, exist_ok=True)
 
-        # save loader
-        loader.save(os.path.join(self.config.output_path, "loader.joblib"))
-
         # save model
         model.save(self.config.output_path)
-
-        # save feature importance
-        model.feature_importance(cols).to_csv(
-            os.path.join(self.config.output_path, "importance.csv")
-        )

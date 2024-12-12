@@ -7,7 +7,7 @@ import geopandas as gpd
 from pydantic import BaseModel
 
 from services.base import BaseCommand
-from services.model import AlgorithmEnum, DataLoader, Trainer
+from services.model import AlgorithmEnum, Trainer, read_dataset
 
 # ----------------------------------------------------------------------------
 #  PERFORMS INFERENCE USING A PRETRAINED MODEL
@@ -24,6 +24,7 @@ class PredictCommandOptions(BaseModel):
 
     jobs: int = 1
 
+# FIXME: this is not tested
 
 class PredictCommand(BaseCommand):
     def __init__(self) -> None:
@@ -73,11 +74,6 @@ class PredictCommand(BaseCommand):
         # parse args
         self.config = PredictCommandOptions(**vars(args))
 
-        # create data loader
-        self.logger.info("Loading preprocessor...")
-        loader = DataLoader()
-        loader.load(self.config.loader_file)
-
         # create model
         self.logger.info("Loading prediction model...")
         model = Trainer(self.config.algorithm, model_params={})
@@ -105,7 +101,7 @@ class PredictCommand(BaseCommand):
 
         # derive features
         X = df_zonal.drop(columns=["zone_id", "ts", "target"], errors="ignore")
-        X = loader.transform(df_zonal)
+        # X = loader.transform(df_zonal)
 
         # run predictions
         df_zonal_pred = df_zonal.copy()

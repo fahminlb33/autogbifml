@@ -37,36 +37,15 @@ class AlgorithmEnum(Enum):
     DECISION_TREE = "decision_tree"
 
 
-class DataLoader:
-    def read_parquet(self, path: str):
-        # load dataset
-        df = pd.read_parquet(path)
+def read_dataset(path: str):
+    # load dataset
+    df = pd.read_parquet(path)
 
-        # create X and y
-        X = df.drop(columns=["zone_id", "ts", "target", "country"], errors="ignore")
-        y = df["target"]
+    # create X and y
+    X = df.drop(columns=["zone_id", "ts", "target", "country", "continent"], errors="ignore")
+    y = df["target"]
 
-        return X, y
-
-    def fit_transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        # create preprocessor
-        self.preprocessor = ColumnTransformer(
-            transformers=[
-                ("numerical_encoder", MinMaxScaler(), [col for col in X.columns]),
-            ]
-        )
-
-        return self.preprocessor.fit_transform(X)
-
-    def transform(self, X: pd.DataFrame) -> pd.DataFrame:
-        return self.preprocessor.transform(X)
-
-    def load(self, input_path: str):
-        self.preprocessor = joblib.load(input_path)
-
-    def save(self, output_path: str):
-        joblib.dump(self.preprocessor, output_path)
-
+    return X, y
 
 class Trainer:
     def __init__(self, algorithm: AlgorithmEnum, model_params: dict) -> None:
@@ -149,21 +128,13 @@ class Trainer:
             self.model = CatBoostClassifier()
             self.model.load_model(input_path)
 
-    def feature_importance(self, feature_names: list[str]) -> pd.DataFrame:
-        return (
-            pd.Series(self.model.feature_importances_, index=feature_names)
-            .sort_values(ascending=False)
-            .reset_index()
-            .rename(columns={"index": "variable", 0: "value"})
-        )
-
 
 class OptunaObjectiveOptions(BaseModel):
     algorithm: AlgorithmEnum
     dataset_file: str
 
-    jobs: int = 1
     cv: int = 10
+    jobs: int = 1
     shuffle: bool = True
     random_seed: int = 21
 
@@ -171,7 +142,6 @@ class OptunaObjectiveOptions(BaseModel):
 class OptunaObjective:
     def __init__(self, config: OptunaObjectiveOptions) -> None:
         self.config = config
-        self.loader = DataLoader()
 
     def __call__(self, trial: optuna.Trial) -> Any:
         with mlflow.start_run(run_name=f"trial-{trial.number}"):
@@ -202,10 +172,6 @@ class OptunaObjective:
                 # split data
                 X_train, X_test = self.X.iloc[train_idx], self.X.iloc[test_idx]
                 y_train, y_test = self.y.iloc[train_idx], self.y.iloc[test_idx]
-
-                # preprocess X
-                X_train = self.loader.fit_transform(X_train)
-                X_test = self.loader.transform(X_test)
 
                 # fit model
                 clf = Trainer(self.config.algorithm, trial_params)
@@ -253,7 +219,7 @@ class OptunaObjective:
             return np.mean(scores["mcc"])
 
     def load_data(self) -> None:
-        self.X, self.y = self.loader.read_parquet(self.config.dataset_file)
+        self.X, self.y = read_dataset(self.config.dataset_file)
 
     def get_param_grid(self, trial: optuna.Trial) -> dict:
         # positive-negative class ratio
@@ -261,40 +227,29 @@ class OptunaObjective:
         n_pos = self.y[self.y == 1].shape[0]
 
         if self.config.algorithm == AlgorithmEnum.DECISION_TREE:
+            # https://arxiv.org/pdf/1812.02207
             return {
-                "criterion": trial.suggest_categorical(
-                    "criterion", ["gini", "entropy"]
-                ),
+                "criterion": trial.suggest_categorical("criterion", ["gini", "entropy"]),
                 "max_depth": trial.suggest_int("max_depth", 1, 100),
-                "max_features": trial.suggest_categorical(
-                    "max_features", [None, "sqrt"]
-                ),
-                "min_samples_split": trial.suggest_categorical(
-                    "min_samples_split", [2, 5, 10]
-                ),
-                "min_samples_leaf": trial.suggest_categorical(
-                    "min_samples_leaf", [1, 2, 4]
-                ),
-                "max_leaf_nodes": trial.suggest_int("max_leaf_nodes", 3, 26),
+                "min_samples_split": trial.suggest_int("min_samples_split", 2, 50),
+                "min_samples_leaf": trial.suggest_int("min_samples_leaf", 1, 50),
                 # fixed parameters
-                "random_state": self.config.random_seed,
                 "class_weight": "balanced",
+                "random_state": self.config.random_seed,
             }
 
         elif self.config.algorithm == AlgorithmEnum.RANDOM_FOREST:
+            # https://arxiv.org/pdf/1804.03515 -> replacement = bootstrap, number of tree max 1000
+            # https://jmlr.org/papers/volume18/17-269/17-269.pdf -> number of tree, 10-1000
             return {
-                "n_estimators": trial.suggest_int("n_estimators", 200, 2000, step=10),
-                "max_depth": trial.suggest_int("max_depth", 3, 100),
-                "min_samples_split": trial.suggest_categorical(
-                    "min_samples_split", [2, 5, 10]
-                ),
-                "min_samples_leaf": trial.suggest_categorical(
-                    "min_samples_leaf", [1, 2, 4]
-                ),
+                # same as decision tree
+                "criterion": trial.suggest_categorical("criterion", ["gini", "entropy"]),
+                "max_depth": trial.suggest_int("max_depth", 1, 100),
+                "min_samples_split": trial.suggest_int("min_samples_split", 2, 50),
+                "min_samples_leaf": trial.suggest_int("min_samples_leaf", 1, 50),
+                # random forest specific
+                "n_estimators": trial.suggest_int("n_estimators", 10, 1000, step=10),
                 "bootstrap": trial.suggest_categorical("bootstrap", [True, False]),
-                "max_features": trial.suggest_categorical(
-                    "max_features_2", [None, "sqrt"]
-                ),
                 # fixed parameters
                 "n_jobs": self.config.jobs,
                 "random_state": self.config.random_seed,
@@ -302,16 +257,13 @@ class OptunaObjective:
             }
 
         elif self.config.algorithm == AlgorithmEnum.XGBOOST:
+            # https://arxiv.org/pdf/2111.06924
             return {
-                "max_depth": trial.suggest_int("max_depth", 3, 110),
-                "learning_rate": trial.suggest_float(
-                    "learning_rate", 1e-3, 0.1, log=True
-                ),
-                "subsample": trial.suggest_float("subsample", 0.1, 1, log=True),
-                "n_estimators": trial.suggest_int("n_estimators", 200, 2000, step=10),
-                "colsample_bylevel": trial.suggest_float(
-                    "colsample_bylevel", 0.01, 1.0, log=True
-                ),
+                "max_depth": trial.suggest_int("max_depth", 2, 10),
+                "n_estimators": trial.suggest_int("n_estimators", 10, 1000, step=10),
+                "learning_rate": trial.suggest_float("learning_rate", 1e-3, 1.0, log=True),
+                "subsample": trial.suggest_float("subsample", 0.1, 1.0),
+                "colsample_bylevel": trial.suggest_float("colsample_bylevel", 0.1, 1.0),
                 # fixed parameters
                 "scale_pos_weight": n_neg / n_pos,
                 "random_state": self.config.random_seed,
@@ -319,23 +271,14 @@ class OptunaObjective:
 
         elif self.config.algorithm == AlgorithmEnum.CATBOOST:
             return {
-                "grow_policy": trial.suggest_categorical(
-                    "grow_policy", ["SymmetricTree", "Depthwise", "Lossguide"]
-                ),
-                "iterations": trial.suggest_int("iterations", 10, 2000, step=10),
                 "depth": trial.suggest_int("depth", 1, 16),
-                "min_data_in_leaf": trial.suggest_int("min_data_in_leaf", 1, 100),
-                "subsample": trial.suggest_float("subsample", 0.1, 1, log=True),
-                "learning_rate": trial.suggest_float(
-                    "learning_rate", 1e-3, 0.1, log=True
-                ),
-                "colsample_bylevel": trial.suggest_float(
-                    "colsample_bylevel", 0.01, 1.0, log=True
-                ),
+                "iterations": trial.suggest_int("iterations", 10, 1000, step=10),
+                "learning_rate": trial.suggest_float("learning_rate", 1e-3, 1.0, log=True),
+                "subsample": trial.suggest_float("subsample", 0.1, 1.0),
+                "colsample_bylevel": trial.suggest_float("colsample_bylevel", 0.1, 1.0),
                 # fixed parameters
                 "verbose": 0,
                 "task_type": "CPU",
-                "bootstrap_type": "Bernoulli",
                 "scale_pos_weight": n_neg / n_pos,
                 "random_seed": self.config.random_seed,
             }
