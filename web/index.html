@@ -91,11 +91,6 @@
               <strong>Prediksi:</strong>
               <span x-text="selectedProps.predicted"></span>
             </p>
-            <!-- Actual -->
-            <p>
-              <strong>Aktual:</strong>
-              <span x-text="selectedProps.target"></span>
-            </p>
 
             <!-- Color-coded Probability -->
             <p>
@@ -106,7 +101,7 @@
             <!-- Log Probability -->
             <p>
               <strong>Log Probabilitas:</strong>
-              <span x-text="selectedProps.proba_log"></span>%
+              <span x-text="selectedProps.proba_log"></span>
             </p>
 
             <!-- Divider -->
@@ -115,16 +110,11 @@
             <!-- Zone Attributes -->
             <h3>Atribut Zona</h3>
             <ul>
-              <li>sob_mean: <span x-text="selectedProps.sob_mean"></span></li>
-              <li>sob_sum: <span x-text="selectedProps.sob_sum"></span></li>
-              <li>fe_mean: <span x-text="selectedProps.fe_mean"></span></li>
-              <li>fe_sum: <span x-text="selectedProps.fe_sum"></span></li>
-              <li>so_sum: <span x-text="selectedProps.so_sum"></span></li>
-              <li>po4_mean: <span x-text="selectedProps.po4_mean"></span></li>
-              <li>pbo_mean: <span x-text="selectedProps.pbo_mean"></span></li>
-              <li>pbo_sum: <span x-text="selectedProps.pbo_sum"></span></li>
-              <li>tob_mean: <span x-text="selectedProps.tob_mean"></span></li>
-              <li>tob_sum: <span x-text="selectedProps.tob_sum"></span></li>
+              <li>distance: <span x-text="selectedProps.distance"></span></li>
+              <li>po4: <span x-text="selectedProps.po4_mean"></span></li>
+              <li>pbo: <span x-text="selectedProps.pbo_mean"></span></li>
+              <li>slope: <span x-text="selectedProps.slope_mean"></span></li>
+              <li>aspect: <span x-text="selectedProps.aspect_mean"></span></li>
             </ul>
           </div>
         </div>

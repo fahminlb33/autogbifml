@@ -31,7 +31,7 @@ function getPredictionSources() {
     "fill-color": [
       "interpolate",
       ["linear"],
-      ["get", "proba"],
+      ["^", ["e"], ["get", "pred_proba"]],
       0,
       "#fde0c5",
       1,
@@ -217,42 +217,30 @@ const AlpineApp = {
       return {
         show: false,
         zone_id: "-",
-        target: "-",
         predicted: "-",
         proba: "-",
         proba_log: "-",
 
-        sob_mean: "-",
-        sob_sum: "-",
-        fe_mean: "-",
-        fe_sum: "-",
-        so_sum: "-",
+        distance: "-",
         po4_mean: "-",
         pbo_mean: "-",
-        pbo_sum: "-",
-        tob_mean: "-",
-        tob_sum: "-",
+        slope_mean: "-",
+        aspect_mean: "-",
       };
-    }
+    }    
 
     return {
       show: true,
       zone_id: this.props.zone_id,
-      target: PREDICTION_CLASS[this.props.target],
-      predicted: PREDICTION_CLASS[this.props.predicted],
-      proba: (this.props.proba * 100).toFixed(4),
-      proba_log: this.props.proba_log.toFixed(4),
+      predicted: PREDICTION_CLASS[this.props.pred_class],
+      proba: (Math.exp(this.props.pred_proba) * 100).toFixed(4),
+      proba_log: this.props.pred_proba.toExponential(),
 
-      sob_mean: this.props.sob_mean.toFixed(4),
-      sob_sum: this.props.sob_sum.toFixed(4),
-      fe_mean: this.props.fe_mean.toFixed(4),
-      fe_sum: this.props.fe_sum.toFixed(4),
-      so_sum: this.props.so_sum.toFixed(4),
+      distance: this.props.distance.toFixed(4),
       po4_mean: this.props.po4_mean.toFixed(4),
       pbo_mean: this.props.pbo_mean.toFixed(4),
-      pbo_sum: this.props.pbo_sum.toFixed(4),
-      tob_mean: this.props.tob_mean.toFixed(4),
-      tob_sum: this.props.tob_sum.toFixed(4),
+      slope_mean: this.props.slope_mean.toFixed(4),
+      aspect_mean: this.props.aspect_mean.toFixed(4),
     };
   },
 
@@ -299,7 +287,7 @@ const AlpineApp = {
     this.monthText = MONTHS[month - 1];
 
     // update predictions filter
-    const filter = ["==", "ts_month", month];
+    const filter = ["==", "ts", month];
     map.setFilter("africa", filter);
     map.setFilter("australia", filter);
 
