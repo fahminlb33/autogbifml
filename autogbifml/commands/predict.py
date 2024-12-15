@@ -24,7 +24,9 @@ class PredictCommandOptions(BaseModel):
 
     jobs: int = 1
 
+
 # FIXME: this is not tested
+
 
 class PredictCommand(BaseCommand):
     def __init__(self) -> None:

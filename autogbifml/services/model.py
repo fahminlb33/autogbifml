@@ -24,7 +24,7 @@ from sklearn.metrics import (
     matthews_corrcoef,
     roc_auc_score,
     average_precision_score,
-    ConfusionMatrixDisplay
+    ConfusionMatrixDisplay,
 )
 
 
@@ -40,10 +40,13 @@ def read_dataset(path: str):
     df = pd.read_parquet(path)
 
     # create X and y
-    X = df.drop(columns=["zone_id", "ts", "target", "country", "continent"], errors="ignore")
+    X = df.drop(
+        columns=["zone_id", "ts", "target", "country", "continent"], errors="ignore"
+    )
     y = df["target"]
 
     return X, y
+
 
 class Trainer:
     def __init__(self, algorithm: AlgorithmEnum, model_params: dict) -> None:
@@ -53,13 +56,13 @@ class Trainer:
     def fit(self, X, y):
         if self.model == None:
             raise ValueError("Model not created")
-        
+
         self.model.fit(X, y)
 
     def predict(self, X):
         if self.model == None:
             raise ValueError("Model not created")
-        
+
         return self.model.predict(X)
 
     def predict_proba(self, X):
@@ -215,7 +218,9 @@ class OptunaObjective:
         if self.config.algorithm == AlgorithmEnum.DECISION_TREE:
             # https://arxiv.org/pdf/1812.02207
             return {
-                "criterion": trial.suggest_categorical("criterion", ["gini", "entropy"]),
+                "criterion": trial.suggest_categorical(
+                    "criterion", ["gini", "entropy"]
+                ),
                 "max_depth": trial.suggest_int("max_depth", 2, 100),
                 "min_samples_split": trial.suggest_int("min_samples_split", 2, 50),
                 "min_samples_leaf": trial.suggest_int("min_samples_leaf", 1, 50),
@@ -229,7 +234,9 @@ class OptunaObjective:
             # https://jmlr.org/papers/volume18/17-269/17-269.pdf -> number of tree, 10-1000
             return {
                 # same as decision tree
-                "criterion": trial.suggest_categorical("criterion", ["gini", "entropy"]),
+                "criterion": trial.suggest_categorical(
+                    "criterion", ["gini", "entropy"]
+                ),
                 "max_depth": trial.suggest_int("max_depth", 2, 100),
                 "min_samples_split": trial.suggest_int("min_samples_split", 2, 50),
                 "min_samples_leaf": trial.suggest_int("min_samples_leaf", 1, 50),
@@ -247,7 +254,9 @@ class OptunaObjective:
             return {
                 "max_depth": trial.suggest_int("max_depth", 2, 10),
                 "n_estimators": trial.suggest_int("n_estimators", 10, 1000, step=10),
-                "learning_rate": trial.suggest_float("learning_rate", 1e-3, 1.0, log=True),
+                "learning_rate": trial.suggest_float(
+                    "learning_rate", 1e-3, 1.0, log=True
+                ),
                 "subsample": trial.suggest_float("subsample", 0.1, 1.0),
                 "colsample_bylevel": trial.suggest_float("colsample_bylevel", 0.1, 1.0),
                 # fixed parameters
@@ -261,7 +270,9 @@ class OptunaObjective:
             return {
                 "depth": trial.suggest_int("depth", 2, 16),
                 "iterations": trial.suggest_int("iterations", 10, 1000, step=10),
-                "learning_rate": trial.suggest_float("learning_rate", 1e-3, 1.0, log=True),
+                "learning_rate": trial.suggest_float(
+                    "learning_rate", 1e-3, 1.0, log=True
+                ),
                 "subsample": trial.suggest_float("subsample", 0.1, 1.0),
                 "colsample_bylevel": trial.suggest_float("colsample_bylevel", 0.1, 1.0),
                 # fixed parameters
