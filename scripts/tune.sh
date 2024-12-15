@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 
-set -e
+set -euxo pipefail
 
-python autogbifml --jobs 12 tune ../dataset/combined/train-sel.parquet ../dataset/models/catboost_tune --name thesis_catboost_tune_v3 --algorithm catboost --shuffle --tracking-url http://10.20.20.102:8009 --storage mysql://optuna:optuna123@10.20.20.102:3306/optuna
-python autogbifml --jobs 12 tune ../dataset/combined/train-sel.parquet ../dataset/models/xgboost_tune --name thesis_xgboost_tune_v3 --algorithm xgboost --shuffle --tracking-url http://10.20.20.102:8009 --storage mysql://optuna:optuna123@10.20.20.102:3306/optuna
-python autogbifml --jobs 12 tune ../dataset/combined/train-sel.parquet ../dataset/models/decision_tree_tune --name thesis_decision_tree_tune_v3 --algorithm decision_tree --shuffle --tracking-url http://10.20.20.102:8009 --storage mysql://optuna:optuna123@10.20.20.102:3306/optuna
-python autogbifml --jobs 12 tune ../dataset/combined/train-sel.parquet ../dataset/models/random_forest_tune --name thesis_random_forest_tune_v3 --algorithm random_forest --shuffle --tracking-url http://10.20.20.102:8009 --storage mysql://optuna:optuna123@10.20.20.102:3306/optuna
+export PYTHONUNBUFFERED="1"
+export FOR_DISABLE_CONSOLE_CTRL_HANDLER="1"
 
-python autogbifml --jobs 12 tune ../dataset/combined_all/train-sel-10.parquet ../dataset/models_all/decision_tree_tune_v5 --name thesis_decision_tree_tune_v5 --algorithm decision_tree --shuffle --tracking-url http://10.20.20.102:8009 --storage mysql://optuna:optuna123@10.20.20.102:3306/optuna
-python autogbifml --jobs 12 tune ../dataset/combined_all/train-sel-10.parquet ../dataset/models_all/xgboost_tune_v5 --name thesis_xgboost_tune_v5 --algorithm xgboost --shuffle --tracking-url http://10.20.20.102:8009 --storage mysql://optuna:optuna123@10.20.20.102:3306/optuna
-python autogbifml --jobs 12 tune ../dataset/combined_all/train-sel-10.parquet ../dataset/models_all/random_forest_tune_v5 --name thesis_random_forest_tune_v5 --algorithm random_forest --shuffle --tracking-url http://10.20.20.102:8009 --storage mysql://optuna:optuna123@10.20.20.102:3306/optuna
-python autogbifml --jobs 12 tune ../dataset/combined_all/train-sel-10.parquet ../dataset/models_all/catboost_tune_v5 --name thesis_catboost_tune_v5 --algorithm catboost --shuffle --tracking-url http://10.20.20.102:8009 --storage mysql://optuna:optuna123@10.20.20.102:3306/optuna
+export MLFLOW_TRACKING_USERNAME="admin"
+export MLFLOW_TRACKING_PASSWORD="5QTj8QznwgP##soC"
+# export MLFLOW_ENABLE_SYSTEM_METRICS_LOGGING="true"
+
+python autogbifml --jobs 12 tune ./dataset/merged/train.parquet ./dataset/models/xgboost_tune --name thesis_xgboost --algorithm xgboost --shuffle --tracking-url http://10.20.20.102:8009 --storage sqlite:///tune-terakhir.db
+python autogbifml --jobs 12 tune ./dataset/merged/train.parquet ./dataset/models/catboost_tune --name thesis_catboost --algorithm catboost --shuffle --tracking-url http://10.20.20.102:8009 --storage sqlite:///tune-terakhir.db
+python autogbifml --jobs 12 tune ./dataset/merged/train.parquet ./dataset/models/random_forest_tune --name thesis_random_forest --algorithm random_forest --shuffle --tracking-url http://10.20.20.102:8009 --storage sqlite:///tune-terakhir.db
+python autogbifml --jobs 12 tune ./dataset/merged/train.parquet ./dataset/models/decision_tree_tune --name thesis_decision_tree --algorithm decision_tree --shuffle --tracking-url http://10.20.20.102:8009 --storage sqlite:///tune-terakhir.db
