@@ -9,24 +9,22 @@ from pydantic import BaseModel
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 
 from xgboost import XGBClassifier
 from catboost import CatBoostClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.model_selection import KFold
+from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import (
     accuracy_score,
     precision_score,
     recall_score,
     f1_score,
     matthews_corrcoef,
-    ConfusionMatrixDisplay,
-    RocCurveDisplay,
-    PrecisionRecallDisplay,
+    roc_auc_score,
+    average_precision_score,
+    ConfusionMatrixDisplay
 )
 
 
@@ -55,13 +53,13 @@ class Trainer:
     def fit(self, X, y):
         if self.model == None:
             raise ValueError("Model not created")
-
+        
         self.model.fit(X, y)
 
     def predict(self, X):
         if self.model == None:
             raise ValueError("Model not created")
-
+        
         return self.model.predict(X)
 
     def predict_proba(self, X):
@@ -81,6 +79,8 @@ class Trainer:
             "recall": recall_score(y, y_pred),
             "f1": f1_score(y, y_pred),
             "mcc": matthews_corrcoef(y, y_pred),
+            "roc_auc": roc_auc_score(y, y_pred),
+            "ap": average_precision_score(y, y_pred),
         }
 
     def create_model(self, params: dict):
@@ -158,16 +158,18 @@ class OptunaObjective:
                 "recall": [],
                 "f1": [],
                 "mcc": [],
+                "roc_auc": [],
+                "ap": [],
             }
 
             # perform cross validation
-            cv = KFold(
+            cv = StratifiedKFold(
                 n_splits=self.config.cv,
                 shuffle=self.config.shuffle,
                 random_state=self.config.random_seed,
             )
             for fold_i, (train_idx, test_idx) in enumerate(cv.split(self.X, self.y)):
-                print(">>> Training fold %d", fold_i + 1)
+                print(f"Training fold {fold_i + 1}")
 
                 # split data
                 X_train, X_test = self.X.iloc[train_idx], self.X.iloc[test_idx]
@@ -186,30 +188,14 @@ class OptunaObjective:
                 scores["recall"].append(recall_score(y_test, y_pred))
                 scores["f1"].append(f1_score(y_test, y_pred))
                 scores["mcc"].append(matthews_corrcoef(y_test, y_pred))
-
-                # feature importance
-                mlflow.log_text(
-                    clf.feature_importance(self.X.columns).to_csv(),
-                    f"feature_importance_fold_{fold_i + 1}.csv",
-                )
+                scores["roc_auc"].append(roc_auc_score(y_test, y_pred))
+                scores["ap"].append(average_precision_score(y_test, y_pred))
 
                 # plot confusion matrix
-                fig, ax = plt.subplots()
+                fig = Figure()
+                ax = fig.subplots()
                 ConfusionMatrixDisplay.from_predictions(y_test, y_pred, ax=ax)
                 mlflow.log_figure(fig, f"confusion_matrix_fold_{fold_i + 1}.png")
-
-                # plot ROC
-                fig, ax = plt.subplots()
-                RocCurveDisplay.from_predictions(y_test, y_pred, ax=ax)
-                mlflow.log_figure(fig, f"roc_curve_fold_{fold_i + 1}.png")
-
-                # plot precision-recall
-                fig, ax = plt.subplots()
-                PrecisionRecallDisplay.from_predictions(y_test, y_pred, ax=ax)
-                mlflow.log_figure(fig, f"precision_recall_fold_{fold_i + 1}.png")
-
-                # close all matplotlib windows
-                plt.close("all")
 
             # log metrics to mlflow
             for metric_name, metric_values in scores.items():
@@ -230,7 +216,7 @@ class OptunaObjective:
             # https://arxiv.org/pdf/1812.02207
             return {
                 "criterion": trial.suggest_categorical("criterion", ["gini", "entropy"]),
-                "max_depth": trial.suggest_int("max_depth", 1, 100),
+                "max_depth": trial.suggest_int("max_depth", 2, 100),
                 "min_samples_split": trial.suggest_int("min_samples_split", 2, 50),
                 "min_samples_leaf": trial.suggest_int("min_samples_leaf", 1, 50),
                 # fixed parameters
@@ -244,7 +230,7 @@ class OptunaObjective:
             return {
                 # same as decision tree
                 "criterion": trial.suggest_categorical("criterion", ["gini", "entropy"]),
-                "max_depth": trial.suggest_int("max_depth", 1, 100),
+                "max_depth": trial.suggest_int("max_depth", 2, 100),
                 "min_samples_split": trial.suggest_int("min_samples_split", 2, 50),
                 "min_samples_leaf": trial.suggest_int("min_samples_leaf", 1, 50),
                 # random forest specific
@@ -265,13 +251,15 @@ class OptunaObjective:
                 "subsample": trial.suggest_float("subsample", 0.1, 1.0),
                 "colsample_bylevel": trial.suggest_float("colsample_bylevel", 0.1, 1.0),
                 # fixed parameters
+                "device": "gpu",
+                "nthread": self.config.jobs,
                 "scale_pos_weight": n_neg / n_pos,
-                "random_state": self.config.random_seed,
+                "seed": self.config.random_seed,
             }
 
         elif self.config.algorithm == AlgorithmEnum.CATBOOST:
             return {
-                "depth": trial.suggest_int("depth", 1, 16),
+                "depth": trial.suggest_int("depth", 2, 16),
                 "iterations": trial.suggest_int("iterations", 10, 1000, step=10),
                 "learning_rate": trial.suggest_float("learning_rate", 1e-3, 1.0, log=True),
                 "subsample": trial.suggest_float("subsample", 0.1, 1.0),

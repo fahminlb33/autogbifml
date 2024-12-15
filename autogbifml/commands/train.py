@@ -1,4 +1,5 @@
 import os
+import time
 import glob
 from typing import Any
 from argparse import ArgumentParser, _SubParsersAction
@@ -84,11 +85,21 @@ class TrainCommand(BaseCommand):
 
         # fit model
         self.logger.info("Fitting model...")
+        st = time.time()
         model.fit(X_train, y_train)
+        dt = time.time() - st
+        self.logger.info(f"Training duration: {dt:.5f}")
 
         # evaluate model
+        self.logger.info("Evaluating model...")
+        st = time.time()
         scores = model.evaluate(X_test, y_test)
-        self.logger.info("Evaluation scores:\n%s", scores)
+        dt = time.time() - st
+        self.logger.info(f"Evaluation duration: {dt:.5f}")
+
+        self.logger.info(f"Evaluation scores:")
+        for k, v in scores.items():
+            self.logger.info(f"{k} = {v:.5f}")
 
         # create output dir
         os.makedirs(self.config.output_path, exist_ok=True)
