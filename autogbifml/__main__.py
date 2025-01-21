@@ -2,9 +2,6 @@ import argparse
 
 import matplotlib
 from pydantic import ValidationError
-from sklearnex import patch_sklearn
-
-patch_sklearn()
 
 from commands import (
     DownloadCmemsCommand,
