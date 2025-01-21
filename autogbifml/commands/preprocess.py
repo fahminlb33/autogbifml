@@ -298,16 +298,16 @@ class PreprocessZonalStatsCommand(BaseCommand):
 
         # drop duplicates
         df_final = df_final.drop_duplicates(
-            subset=["ts", "zone_id", "country", "target"]
+            subset=["ts", "zone_id", "target"]
         )
 
         # rearange columns
         cols = list(
             x
             for x in df_final.columns
-            if not x.startswith("target") and x not in ["country", "ts", "zone_id"]
+            if not x.startswith("target") and x not in ["ts", "zone_id"]
         )
-        cols = ["country", "ts", "zone_id", *cols, "target"]
+        cols = ["ts", "zone_id", *cols, "target"]
 
         # save merged dataset
         df_final[cols].to_parquet(self.profile.output_file)

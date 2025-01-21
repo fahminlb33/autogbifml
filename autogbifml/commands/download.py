@@ -1,4 +1,5 @@
-from typing import Any
+from datetime import date
+from typing import Any, Optional
 from argparse import ArgumentParser, _SubParsersAction
 
 from yaml import safe_load
@@ -18,10 +19,10 @@ class DownloadProfile(BaseModel):
     maximumLongitude: float
     minimumLatitude: float
     maximumLatitude: float
-    minimumDepth: float
-    maximumDepth: float
-    startDateTime: str
-    endDateTime: str
+    minimumDepth: Optional[float] = None
+    maximumDepth: Optional[float] = None
+    startDateTime: date
+    endDateTime: date
     outputPath: str
     dataset: list[DownloadDataset]
 
@@ -41,7 +42,7 @@ class DownloadCmemsCommand(BaseCommand):
         )
 
         parser.set_defaults(func=DownloadCmemsCommand())
-        parser.add_argument("profile-file", type=str, help="Path to download profile")
+        parser.add_argument("profile_file", type=str, help="Path to download profile")
 
     def __call__(self, args) -> Any:
         # parse args
@@ -66,5 +67,4 @@ class DownloadCmemsCommand(BaseCommand):
                 minimum_depth=profile.minimumDepth,
                 maximum_depth=profile.maximumDepth,
                 output_directory=profile.outputPath,
-                force_download=True,
             )

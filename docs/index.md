@@ -77,17 +77,8 @@ Calculates the zonal statistics using the zoned whale sighting zone polygons and
 Example command:
 
 ```sh
-python autogbifml --jobs 4 preprocess zonal-stats \
-    ./dataset/gbif/occurrence.csv \
-    ./dataset/shp/africa/grid-sea-africa-zoned.shp \
-    ./dataset/africa/cmems \
-    ./dataset/zonal/africa.parquet
-
-python autogbifml --jobs 4 preprocess zonal-stats \
-    ./dataset/gbif/occurrence.csv \
-    ./dataset/shp/australia/grid-sea-australia-zoned.shp \
-    ./dataset/australia/cmems \
-    ./dataset/zonal/australia.parquet
+python autogbifml --jobs 4 preprocess zonal-stats ./profiles/zonal-africa.yml
+python autogbifml --jobs 4 preprocess zonal-stats ./profiles/zonal-australia.yml
 ```
 
 #### `preprocess merge`
@@ -100,9 +91,11 @@ Example command:
 python autogbifml preprocess merge ./dataset/zonal ./dataset/merged --test-size 0.2
 ```
 
-#### `preprocess feature-selection`
+#### `preprocess feature-selection`❌
 
 Performs feature selection using information gain as the metric.
+
+> This command is unused because it is implemented in the notebooks.
 
 Example command:
 
@@ -120,9 +113,11 @@ python autogbifml preprocess feature-selection \
     --features=sob_mean,sob_sum,fe_mean,fe_sum,so_sum,po4_mean,pbo_mean,pbo_sum,tob_mean,tob_sum
 ```
 
-## `tune`
+## `tune`❌
 
 Performs hyperparameter tuning using the training dataset.
+
+> This command is unused because it was not performed in the final draft of the paper.
 
 Example command:
 
@@ -139,10 +134,12 @@ python autogbifml --jobs 12 tune \
 
 For a complete commands used in the reference paper, check the `scripts/tune.sh` script.
 
-## `train`
+## `train`❌
 
 Trains a model and evaluate it using train and test data. This will output the data loader, model, and feature importance CSV.
 The input dataset MUST have two files with the name "train" and "test" with parquet extension.
+
+> This command is unused because it is implemented in the notebooks.
 
 Example command:
 
@@ -154,9 +151,11 @@ python autogbifml train \
     --params-file ./dataset/models/best_params_random_forest.yml
 ```
 
-## `predict`
+## `predict`❌
 
 Performs an inference on input test data and outputs the predictions in GeoJSON format.
+
+> This command is unused because it is implemented in the notebooks.
 
 Example command:
 
